@@ -1,0 +1,54 @@
+{
+ "schemaVersion": 1,
+ "id": "statspage",
+ "name": "StatsPage",
+ "version": "1.0",
+ "dll": "statspage.dll",
+ "options": [
+  {
+   "id": "enabled",
+   "type": "toggle",
+   "default": true,
+   "label": "Enable",
+   "description": "On: four more tabs in the Archives screen of the in-game menu (Completion, Story, Zones and Dylan), with one completion bar and a count for each kind of thing to do or find. Takes effect when the game starts."
+  },
+  {
+   "id": "missing_names",
+   "type": "choice",
+   "default": 0,
+   "choices": [
+    {"value": 0, "label": "After the story"},
+    {"value": 1, "label": "Always"},
+    {"value": 2, "label": "Never"}
+   ],
+   "label": "Names of missing story things",
+   "description": "When the pages name the main story missions, side stories and enemy research entries you have not done yet. Other missing things follow their own settings."
+  },
+  {
+   "id": "hide_story_totals",
+   "type": "toggle",
+   "default": true,
+   "label": "Hide story totals",
+   "description": "On: Main Story Missions and Side Stories show ?? as their total until all of them are done, like 25 / ??."
+  },
+  {
+   "id": "unvisited_zones",
+   "type": "choice",
+   "default": 1,
+   "choices": [
+    {"value": 0, "label": "Named"},
+    {"value": 1, "label": "As ???"},
+    {"value": 2, "label": "Left out"}
+   ],
+   "label": "Zones not visited yet",
+   "description": "How the lists by zone show a zone you have not been to yet."
+  },
+  {
+   "id": "hide_locked_names",
+   "type": "toggle",
+   "default": true,
+   "label": "Hide names of locked items",
+   "description": "On: Artifacts and clothes you have not unlocked show as ??? in the lists of missing ones, next to where they come from. A missing ability shows as ??? until its Resonant is defeated."
+  }
+ ]
+}

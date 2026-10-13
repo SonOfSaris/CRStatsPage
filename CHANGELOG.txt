@@ -1,0 +1,11 @@
+StatsPage changelog
+===================
+
+1.0   Release. Four more tabs in the Archives screen of the in-game menu, behind Collectibles, Enemies and
+      Tutorials: Completion, Story, Zones and Dylan. One completion bar and a count for each kind of thing
+      the game lets you do or find, read from your latest save each time the Archives open. Counts per zone,
+      the names of what is still missing and where it comes from, your place on each SHUM machine, and a row
+      for each side story that comes in parts. The pages hold back what would spoil the story (names of
+      story things not done yet, story totals, zones not visited, names of locked items); each of these is
+      a setting in statspage_config.ini or under Options > MODS (Mod Settings Menu). The mod changes no game
+      code and no save. Made for game version 1.4.1.

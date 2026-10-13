@@ -1,0 +1,23 @@
+# build output
+out/
+*.obj
+*.lib
+*.exp
+*.pdb
+*.ilk
+
+# made by build.bat (tools\gen_ui.py) from ui\statspage_archive.js
+ui.inc
+tools/ui.json
+
+# development-only scripts
+patch*.py
+tools/names_check.py
+__pycache__/
+
+# an imitation of another mod's edits, for a test of the two side by side (holds pieces of that mod)
+tests/cmm_sim.py
+
+# logs and what the game writes next to the mod
+*.log
+ModMenuConfig/
