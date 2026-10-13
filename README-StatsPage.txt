@@ -12,7 +12,8 @@ REQUIRES
 INSTALL
   1. Extract this archive into the game folder (next to CONTROLResonant.exe). Everything goes
      into one folder:
-       crmods\StatsPage\
+       crmods\StatsCompletionTracker\
+     If you have a crmods\StatsPage folder from an earlier download, delete it.
   2. Start the game, open the menu and go to Archives.
   Made for game version 1.4.1. The mod changes no game code and no save. If a later update
   changes the menus, the mod leaves them as they are and says so in its log.
@@ -61,15 +62,15 @@ HOW IT COUNTS
       a missing ability shows as ??? until its Resonant is defeated.
 
 UNINSTALL
-  Delete the crmods\StatsPage folder. Nothing else was changed.
+  Delete the crmods\StatsCompletionTracker folder. Nothing else was changed.
 
 SETTINGS
-  crmods\StatsPage\statspage_config.ini
+  crmods\StatsCompletionTracker\statspage_config.ini
   With Mod Settings Menu: Options > MODS > StatsPage; a choice made in the menu wins over the ini.
   There you choose what the pages hold back (see above) and can switch the mod off.
   If the pages say they found no save (a copy of the game that does not use Steam), name your
   save folder under [Saves] Folder in the ini.
 
 LOG
-  crmods\StatsPage\statspage.log, rewritten every start. It says whether the tabs were added,
-  where the saves are read from and which save the pages show.
+  crmods\StatsCompletionTracker\statspage.log, rewritten every start. It says whether the tabs
+  were added, where the saves are read from and which save the pages show.
