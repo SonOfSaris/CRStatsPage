@@ -138,7 +138,7 @@ public:
         tally::Info info; tally::Units units(tally::kItemCount, 0);
         std::vector<FileInfo> files;
         if (!storage_ || !storage_->list(files)) {
-            info.note = "The save files could not be read. See statspage.log next to the mod.";
+            info.note = "The save files could not be read. See statscompletiontracker.log next to the mod.";
             say("the save files cannot be listed (%s)", storage_ ? storage_->what().c_str() : "no storage");
             return tally::pageJson(units, info, rowKeys, rows, view, version);
         }
@@ -170,7 +170,7 @@ public:
             if (s && s->ok) { current = s; break; }
         }
         if (!current) {
-            info.note = "The save could not be read. See statspage.log next to the mod.";
+            info.note = "The save could not be read. See statscompletiontracker.log next to the mod.";
             return tally::pageJson(units, info, rowKeys, rows, view, version);
         }
         units = current->units;

@@ -75,8 +75,8 @@ void logf(const char* fmt, ...) {
 }
 
 // ---------------------------------------------------------------- settings
-std::wstring iniPath()  { return g_dir + L"statspage_config.ini"; }
-std::wstring menuPath() { return g_dir + L"ModMenuConfig\\statspage.ini"; }
+std::wstring iniPath()  { return g_dir + L"statscompletiontracker_config.ini"; }
+std::wstring menuPath() { return g_dir + L"ModMenuConfig\\statscompletiontracker.ini"; }
 
 int iniInt(const wchar_t* sec, const wchar_t* key, int def, const std::wstring& file) {
     wchar_t buf[64]; GetPrivateProfileStringW(sec, key, L"", buf, 64, file.c_str());
@@ -85,7 +85,7 @@ int iniInt(const wchar_t* sec, const wchar_t* key, int def, const std::wstring& 
 }
 
 // Mod Settings Menu saves what the player changes on Options > MODS under [Settings] in
-// ModMenuConfig\<id>.ini, in the folder of the descriptor (statspage.menu.json, next to this DLL).
+// ModMenuConfig\<id>.ini, in the folder of the descriptor (statscompletiontracker.menu.json, next to this DLL).
 bool menuNum(const wchar_t* key, double& v, const std::wstring& file) {
     wchar_t buf[64]; GetPrivateProfileStringW(L"Settings", key, L"", buf, 64, file.c_str());
     if (!buf[0]) return false;
@@ -139,7 +139,7 @@ std::string pageJson() {
             if (steam->open()) g_storage = steam; else delete steam;
         }
         if (g_storage) logf("saves are read from %s", g_storage->what().c_str());
-        else logf("no save storage: this copy of the game has no steam_api64.dll loaded. Name the save folder in statspage_config.ini, [Saves] Folder");
+        else logf("no save storage: this copy of the game has no steam_api64.dll loaded. Name the save folder in statscompletiontracker_config.ini, [Saves] Folder");
         g_engine = new engine::Engine(g_storage, logf);
     }
     tally::View view;
@@ -441,7 +441,7 @@ BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID reserved) {
         InitializeCriticalSection(&g_statusLock);
         InitializeCriticalSection(&g_engineLock);
         g_t0 = GetTickCount();
-        g_log = _wfsopen((g_dir + L"statspage.log").c_str(), L"w", _SH_DENYWR);   // readable while the game runs
+        g_log = _wfsopen((g_dir + L"statscompletiontracker.log").c_str(), L"w", _SH_DENYWR);   // readable while the game runs
         logf("StatsPage %s loading from %ls", kVersion, g_dir.c_str());
         CreateThread(nullptr, 0, initThread, nullptr, 0, nullptr);
     } else if (reason == DLL_PROCESS_DETACH) {

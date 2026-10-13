@@ -1,5 +1,5 @@
 /* StatsPage: the completion tabs of the Archives screen (in-game menu).
- * statspage.dll appends this file to the game's globals script. It stands on its own: it uses only what the page
+ * statscompletiontracker.dll appends this file to the game's globals script. It stands on its own: it uses only what the page
  * gives every script (the document, "engine", "navigation", the game's data models as globals), no game file is
  * changed for it, and if anything here fails the game's own three tabs are put back.
  *

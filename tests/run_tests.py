@@ -1,4 +1,4 @@
-# run_tests.py - the offline tests of StatsPage. Needs out/statspage.dll (build.bat), tests/out/*.exe
+# run_tests.py - the offline tests of StatsPage. Needs out/statscompletiontracker.dll (build.bat), tests/out/*.exe
 # (build_tests.bat), node, the game's two UI files and a folder of saves.
 #   python run_tests.py <folder with save files> [second save folder ...]
 # 1. fakegame.exe: the DLL in a stand-in game (alone, behind another mod, without the handler in the exe)
@@ -27,8 +27,8 @@ def win(p): return os.path.normpath(p)
 def stage(name, saves, more=''):
     d = work + name + '/'
     shutil.rmtree(d, ignore_errors=True); os.makedirs(d)
-    shutil.copy(src + 'out/statspage.dll', d)
-    with open(d + 'statspage_config.ini', 'w') as f: f.write('[General]\nEnabled=1\n[Page]\nMissingNames=0\n[Saves]\nFolder=%s\n' % win(saves) + more)
+    shutil.copy(src + 'out/statscompletiontracker.dll', d)
+    with open(d + 'statscompletiontracker_config.ini', 'w') as f: f.write('[General]\nEnabled=1\n[Page]\nMissingNames=0\n[Saves]\nFolder=%s\n' % win(saves) + more)
     return d
 def run_host(name, saves, *flags):
     d = stage(name, saves, '[Archives]\nTrace=1\n' if '--trace' in flags else '')

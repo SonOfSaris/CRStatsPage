@@ -24,11 +24,11 @@ find, taken from your latest save.
 Grab `StatsPage.zip` from the [releases](../../releases) and extract it into the game folder
 (next to `CONTROLResonant.exe`). Everything lands in `crmods\StatsCompletionTracker\`. It needs
 crloader, the `winmm.dll` mod loader, which you already have if you run other DLL mods. Full
-details, and how the bar counts, are in [README-StatsPage.txt](README-StatsPage.txt).
+details, and how the bar counts, are in [README-StatsCompletionTracker.txt](README-StatsCompletionTracker.txt).
 
 Made for game version 1.4.1. The mod shows no messages: if a later update moves the code it
 needs, it leaves the game's menus as they are and says so in
-`crmods\StatsCompletionTracker\statspage.log`.
+`crmods\StatsCompletionTracker\statscompletiontracker.log`.
 It works next to other mods that change the same menu files, Mod Settings Menu among them.
 
 ## Build
@@ -40,10 +40,10 @@ build.bat
 ```
 
 It runs `tools\gen_ui.py`, which packs `ui\statspage_archive.js` into `ui.inc`, and compiles
-`statspage.cpp` into `out\statspage.dll`. No third-party code is used. `package.py` makes the
-release zip from the DLL and the package files; by hand, copy the DLL, `statspage_config.ini`,
-`statspage.menu.json` and `README-StatsPage.txt` into `crmods\StatsCompletionTracker\` in the
-game folder.
+`statspage.cpp` into `out\statscompletiontracker.dll`. No third-party code is used. `package.py`
+makes the release zip from the DLL and the package files; by hand, copy the DLL,
+`statscompletiontracker_config.ini`, `statscompletiontracker.menu.json` and
+`README-StatsCompletionTracker.txt` into `crmods\StatsCompletionTracker\` in the game folder.
 
 `tables.inc` holds what the mod counts: every mission, encounter, item and upgrade with the save
 entry that marks it as done. It is made by `tools\gen_tables.py` from data taken out of the game's

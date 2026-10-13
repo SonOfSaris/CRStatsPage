@@ -1,9 +1,9 @@
-// Test host for statspage.dll: an exe whose .text holds the start of the game's UI file handler byte for byte
+// Test host for statscompletiontracker.dll: an exe whose .text holds the start of the game's UI file handler byte for byte
 // (and of the function after it in the handler's vtable), followed by a jump into a C++ stand-in that serves
 // two files from disk the way the game serves its own. The mod therefore finds the vtable entry, puts itself
 // in front and adds to the globals script exactly as in the game; the second file, the Options page, must come
 // out untouched.
-// usage: fakegame.exe <folder with statspage.dll> <globals script> <options template> <out folder> [--mod-first] [--no-pattern] [--trace]
+// usage: fakegame.exe <folder with statscompletiontracker.dll> <globals script> <options template> <out folder> [--mod-first] [--no-pattern] [--trace]
 //   --mod-first    another mod has taken the vtable entry before the DLL loads (it appends a note to both files)
 //   --no-pattern   the handler is not in this exe: the DLL must log that and unload
 //   --trace        the ini next to the DLL has Trace=1: the answer must say so
@@ -152,16 +152,16 @@ int main(int argc, char** argv) {
     { FakeResponse r; uiRequest("coui://base/uiresources/game/ui/globals_island.bundle.js", r);
       check(r.done && !r.failed && r.data.size() >= g_script.size() && g_extraReturn == 77, "rig: the UI file handler serves the script"); }
 
-    std::string logPath = dir + "\\statspage.log";
+    std::string logPath = dir + "\\statscompletiontracker.log";
     DeleteFileA(logPath.c_str());
-    HMODULE mod = LoadLibraryA((dir + "\\statspage.dll").c_str());
+    HMODULE mod = LoadLibraryA((dir + "\\statscompletiontracker.dll").c_str());
     check(mod != nullptr, "the DLL loads");
     if (!mod) return 1;
     if (noPattern) {
         check(waitFor([&] { return has(readFile(logPath), "unloading this copy"); }, 6000), "without the handler in the exe the DLL says so and leaves");
         check(has(readFile(logPath), "UI file handler's neighbour was found 0 times"), "and the log names what was missing");
         Sleep(300);
-        check(GetModuleHandleA("statspage.dll") == nullptr, "the DLL is gone from the process");
+        check(GetModuleHandleA("statscompletiontracker.dll") == nullptr, "the DLL is gone from the process");
         FakeResponse r; uiRequest("coui://base/uiresources/game/ui/globals_island.bundle.js", r);
         check(r.done && r.data == g_script, "and the script goes out untouched");
         printf("%s\n", g_fail ? "FAILED" : "ALL PASSED");

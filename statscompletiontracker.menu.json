@@ -1,9 +1,9 @@
 {
  "schemaVersion": 1,
- "id": "statspage",
+ "id": "statscompletiontracker",
  "name": "StatsPage",
  "version": "1.0",
- "dll": "statspage.dll",
+ "dll": "statscompletiontracker.dll",
  "options": [
   {
    "id": "enabled",
