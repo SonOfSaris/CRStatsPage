@@ -96,6 +96,10 @@ def expect_abilities(m, hide=True):
     rev = evalsave.revealed(m, T)
     c = [c for c in T['categories'] if c['key'] == 'abilities'][0]
     return sorted(it['name'] if not hide or (it['rv'] >= 0 and rev[it['rv']]) else '???' for it in c['items'] if not evalsave.done_units(it, m, given, narr))
+def main_done(d, ref):
+    """the names Main Story Missions lists as done, and the ones the reference has as done (in the tables' order, the order of the story)"""
+    miss = [x.split(' (')[0] for x in ref['missing']]
+    return [n for k, n, note in d.get('done', [])], [i['name'] for i in [c for c in T['categories'] if c['key'] == 'main'][0]['items'] if i['name'] not in miss]
 def folder_page(folder, *args):
     r = subprocess.run([here + 'out/tallytest.exe', 'folder', win(folder)] + [str(a) for a in args], capture_output=True)
     p = json.loads(r.stdout.decode('utf-8')); return p, {x['k']: x for x in p['rows']}
@@ -128,8 +132,12 @@ def held_back(folder, label):
     check(und and all('Ending' not in [g[1] for g in rows[k]['d']['groups']] and marks(rows, k) == max(zone_marks(k), 1) and rows[k]['d']['groups'][-1][1] == '???' for k in und) and
           all(marks(rows, k) == zone_marks(k) for k in found if k not in und) and all(rows[k]['v'] == '%d / %d' % (by[k]['have'], by[k]['total']) for k in und),
           '%s: an ending not done has no line, it is inside the ??? of its list (%s); the count still holds it' % (label, ', '.join(rows[k]['l'] for k in und)))
-    check(rows['side']['d'].get('hidden') == 'Undiscovered side stories will be listed here after completing the main story.' and 'hidden' in rows['main']['d'] and rows['main']['d']['hidden'] != rows['side']['d']['hidden'],
-          '%s: Side Stories says when its missing ones will be listed' % label)
+    check(rows['side']['d'].get('hidden') == 'Undiscovered side stories will be listed here after completing the main story.' and 'hidden' not in rows['main']['d'],
+          '%s: Side Stories says when its missing ones will be listed; Main Story Missions has no sentence' % label)
+    got_main, want_main = main_done(rows['main']['d'], by['main'])
+    check(got_main == want_main and 0 < len(got_main) == by['main']['have'] < 26 and list(rows['main']['d']) == ['done'] and got_main[0] == 'Orientation' and
+          all(k and note == '' for k, n, note in rows['main']['d']['done']),
+          '%s: Main Story Missions lists the %d completed missions in the story\'s order and nothing about the rest: %s ... %s' % (label, len(got_main), got_main[0], got_main[-1]))
     got_done, want_done = side_done(rows['side']['d'], by['side'])
     check(got_done == want_done and 0 < len(got_done) == by['side']['have'] < 12 and 'missing' not in rows['side']['d'] and list(rows['side']['d']) == ['done', 'hidden'],
           '%s: Side Stories lists the %d completed ones by name, above its sentence about the rest: %s' % (label, len(got_done), ', '.join(got_done)))
@@ -160,27 +168,38 @@ def held_back(folder, label):
           r0['shum']['d']['groups'][-1] == ['', apt, 0, 3, 0, 'Need higher score'] and '???' not in [g[1] for g in r0['shum']['d']['groups']] and
           all(g[1] not in (apt, '???') for g in r2['shum']['d']['groups']) and rows['shum']['v'] == '%d / %d' % (by['shum']['have'], by['shum']['total']),
           '%s: the SH\u00dcM machine of the apartment reads ??? at the bottom until the main story is done (%s); zones setting 0 names it, 2 leaves it out' % (label, ', '.join(sgn)))
-    def held(notes):
-        for z in hidden: notes = [w.replace(z + ' zone level', '??? zone level') for w in notes]
-        return sorted(notes)
-    want_notes = held([x.split(' (')[1][:-1] for x in by['artifacts']['missing'] if ' (' in x])
+    story_shown = set(by[k]['label'] for k in stories if by[k]['have'] > 0)
+    def held(ref_missing):
+        """the notes of the reference's missing things as the page must show them: a zone not visited reads ???, and so does a side story in parts not found yet"""
+        out = []
+        for x in ref_missing:
+            w = x.split(' (')[1][:-1]
+            for z in hidden:
+                if w.startswith(z + ' '): w = '???' + w[len(z):]
+            if w.startswith('side story: ') and w[12:] not in story_shown: w = 'side story: ???'
+            out.append(w)
+        return sorted(out)
+    want_notes = held(by['artifacts']['missing'])
     got = rows['artifacts']['d']['missing']
-    check(sorted(note for k, n, note in got if note) == want_notes and any(w.startswith('??? zone level') for w in want_notes) and all(n == '???' for k, n, note in got),
-          '%s: missing Artifacts read ???, and a source in a zone not visited holds the zone back: %s' % (label, '; '.join(w for w in want_notes if w.startswith('???'))))
-    check(not any((z + ' zone level') in json.dumps(p) for z in hidden), '%s: nor do the notes of other rows name such a zone' % label)
+    check(sorted(note for k, n, note in got) == want_notes and any(w.startswith('??? zone level') for w in want_notes) and any(w.startswith('??? main mission') for w in want_notes) and
+          any(w.startswith('side story: ') and w != 'side story: ???' for w in want_notes) and all(n == '???' and note for k, n, note in got),
+          '%s: missing Artifacts read ???, each says where it comes from, and a zone not visited is held back there: %s' % (label, '; '.join(sorted(set(want_notes)))[:260]))
+    check(not any((z + ' ' + what) in json.dumps(p) for z in hidden for what in ('zone level', 'main mission', 'side story', 'SH\u00dcM', 'Resonant', 'world encounter', 'FBC test facility')),
+          '%s: nor do the notes of other rows name such a zone' % label)
     clothes = rows['outfits']['d']['missing']
-    check(len(clothes) == len(by['outfits']['missing']) and all(n == '???' for k, n, note in clothes) and [bool(note) for k, n, note in clothes] == sorted((bool(note) for k, n, note in clothes), reverse=True),
-          '%s: the %d locked clothes read ???, those with a source first' % (label, len(clothes)))
+    check(len(clothes) == len(by['outfits']['missing']) and all(n == '???' and note for k, n, note in clothes) and sorted(note for k, n, note in clothes) == held(by['outfits']['missing']),
+          '%s: the %d locked clothes read ???, each with where it comes from: %s' % (label, len(clothes), '; '.join(sorted(set(note for k, n, note in clothes)))[:200]))
     want_ab = expect_abilities(m)
     got_ab = [n for k, n, note in rows['abilities']['d']['missing']]
-    check(sorted(got_ab) == want_ab and '???' in want_ab and any(n != '???' for n in want_ab) and got_ab == sorted(got_ab, key=lambda n: n == '???'),
-          '%s: a missing ability is named once its selection is open, the others read ???: %s' % (label, ', '.join(got_ab)))
+    check(sorted(got_ab) == want_ab and '???' in want_ab and any(n != '???' for n in want_ab) and
+          sorted(note for k, n, note in rows['abilities']['d']['missing']) == held(by['abilities']['missing']) and all(note for k, n, note in rows['abilities']['d']['missing']),
+          '%s: a missing ability is named once its selection is open, the others read ???; each says where it comes from: %s' % (label, ', '.join('%s (%s)' % (n, note) for k, n, note in rows['abilities']['d']['missing'])))
     p, rows = folder_page(folder, 0, 0, 0, 0)                          # the three settings off
     check(all(rows[k]['v'] == '%d / %d' % (by[k]['have'], by[k]['total']) for k in ('main', 'side')) and [g[1] for g in rows['levels']['d']['groups']] == zn and
           sorted(n for k, n, note in rows['artifacts']['d']['missing']) == sorted(x.split(' (')[0] for x in by['artifacts']['missing']) and '???' not in json.dumps([r for r in p['rows'] if r['k'] not in unfound + und]) and all(rows[k]['l'] == '???' for k in unfound) and
           all(marks(rows, k) == 1 and rows[k]['d']['groups'][-1] == ['', '???', 0, 0, 1] and 'Ending' not in [g[1] for g in rows[k]['d']['groups']] for k in und) and
           sorted(n for k, n, note in rows['outfits']['d']['missing']) == sorted(x.split(' (')[0] for x in by['outfits']['missing']) and sorted(n for k, n, note in rows['abilities']['d']['missing']) == expect_abilities(m, False) and
-          'still to go' in json.dumps(rows['main']), '%s: with the three settings off everything is counted and named in full (a side story in parts not found yet and an ending not done follow the names setting and stay ???, the ending as one line of its own)' % label)
+          'hidden' not in rows['main']['d'] and main_done(rows['main']['d'], by['main'])[0] == want_main, '%s: with the three settings off everything is counted and named in full (a side story in parts not found yet and an ending not done follow the names setting and stay ???, the ending as one line of its own)' % label)
     p, rows = folder_page(folder, 0, 1, 2, 1)                          # zones not visited left out
     check([g[1] for g in rows['levels']['d']['groups']] == [z for z, k in zip(zn, known) if k] and all(len(g) == 4 for key in ('tasks', 'feats', 'levels') for g in rows[key]['d']['groups']),
           '%s: zones setting 2 leaves the zones not visited out of the lists (%d of %d shown)' % (label, len(rows['levels']['d']['groups']), len(zn)))
@@ -196,12 +215,27 @@ check(len(clothes) == len(by['outfits']['missing']) and all(n == '???' and k == 
       sorted(note for k, n, note in clothes if note) == sorted(x.split(' (')[1][:-1] for x in by['outfits']['missing'] if ' (' in x),
       'the %d locked clothes read ??? and keep where they come from: %s' % (len(clothes), '; '.join(note for k, n, note in clothes if note)[:120]))
 abil = [n for k, n, note in rows['Abilities']['d'].get('missing', [])]
-check(abil and sorted(abil) == sorted(by['abilities']['missing']) and '???' not in abil, 'every selection is open in this save, so its missing abilities are named: %s' % ', '.join(abil))
+check(abil and sorted(abil) == sorted(x.split(' (')[0] for x in by['abilities']['missing']) and '???' not in abil and
+      sorted(note for k, n, note in rows['Abilities']['d']['missing']) == sorted(x.split(' (')[1][:-1] for x in by['abilities']['missing']),
+      'every selection is open in this save, so its missing abilities are named, each with its Resonant: %s' % ', '.join('%s (%s)' % (n, note) for k, n, note in rows['Abilities']['d']['missing']))
 arts = rows['Artifacts']['d'].get('missing', [])
 notes = sorted(note for k, n, note in arts if note)
 check(len(arts) == len(by['artifacts']['missing']) and all(n == '???' and k == '' for k, n, note in arts) and notes == sorted(x.split(' (')[1][:-1] for x in by['artifacts']['missing'] if ' (' in x) and
-      'side story, game 1.4.2+' in notes and 'source unconfirmed' in notes and by['artifacts']['total'] == 42 and [bool(note) for k, n, note in arts] == sorted((bool(note) for k, n, note in arts), reverse=True),
-      'the %d missing Artifacts (of 42) read ??? and keep where they come from, those with a source first: %s' % (len(arts), '; '.join(notes)[:150]))
+      'side story: Every Dog Has Her Day' in notes and 'source unconfirmed' in notes and by['artifacts']['total'] == 42 and all(note for k, n, note in arts) and '1.4.2' not in json.dumps(page),
+      'the %d missing Artifacts (of 42) read ??? and each says where it comes from, with no game version in it: %s' % (len(arts), '; '.join(notes)[:260]))
+# every thing of the Dylan tab has a note, and the notes hold back what the page holds back
+for key in ('artifacts', 'outfits', 'abilities'):
+    its = [i for i in [c for c in T['categories'] if c['key'] == key][0]['items'] if not i['kind']]
+    check(all(i['note'] and '(' not in i['note'] and len(evalsave.note_of(i, T)) <= 38 for i in its),
+          'tables: each of the %d %s has a note of at most 38 characters: %s' % (len(its), key, '; '.join(sorted(set(i['note'] for i in its)))[:230]))
+r = subprocess.run([here + 'out/tallytest.exe', 'synthetic', '100000', '0', '0'], capture_output=True)
+none = {x['k']: x for x in json.loads(r.stdout.decode('utf-8'))['rows']}
+nn = [note for k, n, note in none['artifacts']['d']['missing']] + [note for k, n, note in none['outfits']['d']['missing']] + [note for k, n, note in none['abilities']['d']['missing']]
+check(nn.count('side story: ???') == 6 and not any(c['label'] in ' '.join(nn) for c in T['categories'] if c.get('pool')),
+      'with nothing found the notes name no side story in parts: six rewards read "side story: ???"')
+got_main, want_main = main_done(rows['Main Story Missions']['d'], by['main'])
+check(got_main == want_main and len(got_main) == 26 and list(rows['Main Story Missions']['d']) == ['done'] and got_main[0] == 'Orientation',
+      'a finished story: Main Story Missions lists all 26 missions in the story\'s order, from %s to %s' % (got_main[0], got_main[-1]))
 PLACES = {3: '1st Place', 2: '2nd Place', 1: '3rd Place', 0: 'Need higher score'}
 sg = rows['SH\u00dcM Scores']['d']['groups']
 check(sg and all(len(g) == 6 and g[3] == 3 and g[4] == 0 and g[5] == PLACES[g[2]] for g in sg) and [(g[1], g[2]) for g in sg] == [(n, a) for n, a, b in by['shum']['groups']],

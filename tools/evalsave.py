@@ -35,8 +35,9 @@ def revealed(m, T):
     return [m['facts'].get(r['fact']['key'], r['fact']['default']) != 0 for r in T['reveals']]
 
 def note_of(it, T):
-    """an item's note with the zone's name in it"""
-    return it['note'].replace('{z}', T['zones'][it['nz']]['name']) if it['nz'] >= 0 else it['note']
+    """an item's note with the zone's name and the story's title in it"""
+    s = it['note'].replace('{z}', T['zones'][it['nz']]['name']) if it['nz'] >= 0 else it['note']
+    return s.replace('{s}', [c['label'] for c in T['categories'] if c['key'] == it['ns']][0]) if it.get('ns') else s
 
 def evaluate(m, T):
     given = set(rid for rid, cat, lv in m['given'] if lv); narr = set(m['narrative'])

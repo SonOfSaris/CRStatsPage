@@ -81,7 +81,7 @@ def zgroup(z):
     k, t = zone(z)
     return k, t, ZORDER.index({'twistedcity': 'twisted'}.get(z, z))
 def item(c, ident, test, name, key='', kind='', note='', group=None, **kw):
-    it = dict(id=fnv(c['key'] + ':' + ident), ident=ident, test=test, name=name, key=key, kind=kind, note=note, nz=-1, rv=-1,
+    it = dict(id=fnv(c['key'] + ':' + ident), ident=ident, test=test, name=name, key=key, kind=kind, note=note, nz=-1, rv=-1, ns='',
               group=group_of(c, *group) if group else -1)
     it.update(kw); c['items'].append(it); return it
 def facts(*ns): return [dict(key=byname[n], default=fdefault(n), name=n) for n in ns]
@@ -253,11 +253,12 @@ def aname(a):
     return '', aen.get(a, pretty(a))
 # Three Artifacts have no working source in the 1.4.1 data. What the page does with them:
 #   Trusted Spanner         counts. The dog side story did not hand it out up to game 1.4.1; game 1.4.2 (2026-10-08)
-#                           does, also to who finished the story before and has not started New Game Plus.
+#                           does, also to who finished the story before and has not started New Game Plus. Its
+#                           note is that story's, like any other reward of a story in parts.
 #   The Weekend Crossword   counts. Players report it as a zone level reward. In the 1.4.1 data its blueprint sits
-#                           on a reward set nothing names, so the note says no more than that.
+#                           on a reward set nothing names, so the note says no more than "source unconfirmed".
 #   Water Pistol            left out of the tables: a recipe, but no blueprint anywhere.
-COUNTED = {'ch_101_wrench': 'side story, game 1.4.2+', 'ch_105_stapler': 'source unconfirmed'}
+COUNTED = {'ch_101_wrench', 'ch_105_stapler'}
 LEFT_OUT = {'ch_028_dumbbell'}
 ZLEVEL = {'du_downtown_charm': ('downtown', 13), 'du_frontline_charm': ('frontline', 12), 'du_twisted_charm': ('twisted', 11),
           'du_downtown_outfit': ('downtown', 10), 'du_frontline_outfit': ('frontline', 14), 'du_twisted_outfit': ('twisted', 12)}
@@ -266,15 +267,83 @@ def level_note(text):
     for k, (z, lv) in ZLEVEL.items():
         if k in text: return '{z} zone level %d' % lv, ZORDER.index(z)
     return '', -1
+# Every thing of the Dylan tab has a note that says where it comes from. A note names no mission: it gives the
+# kind of thing and its zone ("{z}", held back like every zone's name). A reward of a side story in parts names
+# that story ("{s}": the row's title, ??? while the story is not found). Sources: which quest's journal entry hands
+# out which reward set (questentries), and the zone in the set's name.
+SET_QUEST = {}; QKIND = {}
+for q in qs:
+    for e in q['entries']:
+        for s in e['guaranteed'] + e['loot']:
+            if s: SET_QUEST.setdefault(s, q['name'])
+    n = q['name']
+    QKIND[n] = ('main' if any(i['ident'] == n for i in c_main['items']) else 'side' if any(i['ident'] == n for i in c_side['items']) else
+                PARTS[n][0] if n in PARTS else 'speakers' if n == 'paracriminals' else 'sketch' if n == 'mq_08_sketchbook' else '')
+STORY_ROWS = set(p[0] for p in PARTS.values()) | {'speakers'}
+ZTOK = {'downtown': 'downtown', 'frontline': 'frontline', 'zonehiss': 'hiss', 'hiss': 'hiss', 'pattern': 'pattern', 'moldtown': 'mold', 'mold': 'mold',
+        'undercity': 'undercity', 'twistedcity': 'twisted', 'twisted': 'twisted'}
+def zone_of(text):
+    """the number of the zone a reward set's name speaks of, -1 for none"""
+    for tok in re.split(r'[_ ]', text):
+        if tok in ZTOK: return ZORDER.index(ZTOK[tok])
+    return -1
+def quest_zone(q):
+    for s, qq in SET_QUEST.items():
+        if qq == q and zone_of(s) >= 0: return zone_of(s)
+    return -1
+PLACE = {'first': '1st Place', 'second': '2nd Place', 'third': '3rd Place'}
+def quest_note(setname, seq=1):
+    """(note, zone number, story row) of what a quest's reward set hands out. A set gives its next record with every
+    hand-out, so a record after the first comes with a later playthrough."""
+    kind = QKIND.get(SET_QUEST.get(setname, ''), '')
+    again = ' in New Game Plus' if seq > 1 else ''
+    if kind in ('main', 'side'):
+        z = zone_of(setname)
+        return ('{z} ' if z >= 0 else '') + ('main mission' if kind == 'main' else 'side story') + again, z, ''
+    if kind == 'sketch': return 'every Sketch completed', -1, ''          # the hidden quest behind the map's Sketch markers
+    assert kind in STORY_ROWS and not again, (setname, kind, seq)
+    return 'side story: {s}', -1, kind
+def artifact_note(a, text):
+    if a == 'ch_105_stapler': return 'source unconfirmed', -1, ''
+    ln, nz = level_note(text)
+    if ln: return ln, nz, ''
+    if 'sold by a vendor' in text: return 'blueprint sold by a vendor', -1, ''
+    m = re.search(r'challenge_([a-z_]+?)_(first|second|third)', text)
+    if m:           # the machine outside the zones' own sets is not named: its place is held back until the story's end
+        z = -1 if 'jrpg' in m.group(1) else zone_of(m.group(1))
+        return ('{z} SH\u00dcM, ' if z >= 0 else 'a SH\u00dcM machine, ') + PLACE[m.group(2)], z, ''
+    for s, rec in re.findall(r'(?:blueprint|artifact): (\S+) record (\d+)', text):
+        if s in SET_QUEST: return quest_note(s, int(rec))
+    m = re.search(r'world_encounter_\S+', text)
+    assert m, (a, text)
+    return '{z} world encounter', zone_of(m.group(0)), ''
+cosmetics = {}
+for r in tsv('reward_sets_141.tsv'):
+    for c in (r[12].split() if len(r) > 12 else []): cosmetics.setdefault(c, []).append(r)
+def outfit_note(rows):
+    if any(r[5] == 'default' for r in rows): return 'owned from the start', -1, ''
+    if any('shop item' in r[7] for r in rows): return 'sold by a vendor', -1, ''
+    for r in rows:
+        for s in cosmetics.get(r[0], []):
+            name, category, record, seq = s[0], s[1], s[2], int(s[3] or 0)
+            if category == 'District': return level_note(name) + ('',)
+            if category == 'Challenge':
+                m = re.fullmatch(r'challenge_([a-z_]+?)_(first|second|third)', record)
+                return '{z} SH\u00dcM, ' + PLACE[m.group(2)], zone_of(m.group(1)), ''
+            if category == 'Chest':
+                assert 'fbc_testing_facility' in name, name
+                return '{z} FBC test facility crate', zone_of(name), ''
+            if category == 'Quest': return quest_note(name, seq)
+    raise AssertionError(rows[0][0])
 c_art = cat('artifacts', 'Artifacts', 'Artifacts owned and tapped.', 'missing')
 for r in tsv('artifact_sources_141.tsv'):
     a, state, good = r[0], r[1], (r[2] if len(r) > 2 else '')
     if state == 'stub' or a in LEFT_OUT: continue
     assert state.startswith('earnable') or a in COUNTED, (a, state)
     k, t = aname(a)
-    ln, nz = level_note(good)
-    note = COUNTED.get(a) or ln or ('blueprint sold by a vendor' if 'sold by a vendor' in good else '')
-    item(c_art, a, 'fact', t, k, note=note, nz=nz if note == ln else -1, facts=facts('charm/' + a))
+    note, nz, ns = artifact_note(a, good or (r[3] if len(r) > 3 else ''))        # the Spanner's source is in the "broken" column
+    item(c_art, a, 'fact', t, k, note=note, nz=nz, ns=ns, facts=facts('charm/' + a))
+assert all(i['note'] and (i['nz'] >= 0) == ('{z}' in i['note']) and bool(i['ns']) == ('{s}' in i['note']) for i in c_art['items'])
 
 # ---------------------------------------------------------------- outfit pieces
 oflags = {}
@@ -287,8 +356,9 @@ for n in sorted(oflags):
     earn = any(r[5] in ('default', 'in-game') for r in rows) and n != K9
     k, t = loc('OUTFIT_ITEM_' + rows[0][0].upper())
     kind = '' if earn else ('reach' if n == K9 else 'promo')
-    ln, nz = level_note(' '.join(r[7] for r in rows))
-    item(c_out, n, 'fact', t or clean(rows[0][1]), k, kind=kind, note='reward never arrives' if n == K9 else ln, nz=-1 if n == K9 else nz, facts=facts(n))
+    note, nz, ns = ('reward never arrives', -1, '') if n == K9 else outfit_note(rows) if earn else ('', -1, '')
+    item(c_out, n, 'fact', t or clean(rows[0][1]), k, kind=kind, note=note, nz=nz, ns=ns, facts=facts(n))
+assert all(i['note'] and (i['nz'] >= 0) == ('{z}' in i['note']) for i in c_out['items'] if not i['kind'])
 
 # ---------------------------------------------------------------- abilities
 ABIL = {'air_dodge': ('', 'Air Dodge'), 'astral_construct_summon': ('ABILITY_ASTRAL_SUMMON', 'Spike'), 'barrage_ability': ('ABILITY_BARRAGE', 'Barrage'),
@@ -307,12 +377,24 @@ ASET = {'barrage_ability': 'barrage', 'seekers': 'barrage', 'shield': 'barrage',
         'seize': 'psychic'}
 REVEALS = ['barrage', 'dancer', 'heat', 'mold', 'astral', 'psychic']
 reveals = [dict(id=b, fact=facts('ability_select_unlocks/%s_boss_ability_unlocked' % b)[0]) for b in REVEALS]
+# Where an ability comes from. The twelve of the selections: the Resonant whose defeat opens the selection, by its
+# zone. The eight basic moves, from the saves at hand: five are there from the first save on; Perfect Dodge, Gravity
+# Anomaly and Reach are set in exactly the saves that have one main mission done (The Central Resonant, The
+# Incursion Fault, The Subway Fault).
+BOSS_ZONE = {'barrage': 'downtown', 'heat': 'frontline', 'dancer': 'pattern', 'mold': 'mold', 'astral': 'undercity', 'psychic': 'twisted'}
+BASIC = {'air_dodge': '', 'dash': '', 'dodge': '', 'jump_ability': '', 'surge': '', 'perfect_dodge': 'app_heat', 'gravity_anomaly_ability': 'app_gravity', 'reach': 'app_reach_title'}
+def ability_note(a):
+    if a in ASET: return '{z} Resonant', ZORDER.index(BOSS_ZONE[ASET[a]])
+    if not BASIC[a]: return 'owned from the start', -1
+    assert QKIND[BASIC[a]] == 'main' and quest_zone(BASIC[a]) >= 0, a
+    return '{z} main mission', quest_zone(BASIC[a])
 c_abi = cat('abilities', 'Abilities', 'Resonant abilities unlocked.', 'missing')
 for n in sorted(byname):
     if n.startswith('ability_unlocks/'):
         a = n.split('/')[1].replace('_unlocked', '')
         k, t = loc(ABIL[a][0])
-        item(c_abi, n, 'fact', t or ABIL[a][1], k, rv=REVEALS.index(ASET[a]) if a in ASET else -1, facts=facts(n))
+        note, nz = ability_note(a)
+        item(c_abi, n, 'fact', t or ABIL[a][1], k, note=note, nz=nz, rv=REVEALS.index(ASET[a]) if a in ASET else -1, facts=facts(n))
 assert sum(1 for i in c_abi['items'] if i['rv'] >= 0) == len(ASET) == 12
 
 # ---------------------------------------------------------------- talents and weapon upgrades
@@ -374,6 +456,7 @@ TESTS = {'fact': 0, 'narr': 1, 'given': 2, 'node': 3, 'form': 4, 'level': 5}
 DETAIL = {'none': 0, 'missing': 1, 'groups': 2, 'parts': 3}
 KINDS = {'': 0, 'reach': 1, 'promo': 2}
 fl = []; il = []; gl = []; cl = []
+CATI = {c['key']: i for i, c in enumerate(cats)}
 for c in cats:
     fi, gi = len(il), len(gl)
     for g in c['groups']: gl.append('    { %s, %s, %d },' % (cq(g['name']), cq(g['key']), g['zone']))
@@ -384,8 +467,8 @@ for c in cats:
             for f in it['facts']: fl.append('    { 0x%016XULL, %d },   // %s' % (f['key'], 1 if f['default'] else 0, f['name']))
         elif t in ('node', 'form'): a_, b_ = it['graph_id'], it['hash']
         else: a_, b_ = it['hash'], 0
-        il.append('    { 0x%08Xu, %d, %d, %d, %d, 0x%Xu, 0x%Xu, %s, %s, %s, %d, %d },' % (it['id'], TESTS[t], it.get('units', 1), it['group'], KINDS[it['kind']],
-                  a_, b_, cq(it['name']), cq(it['key']), cq(it['note']), it['nz'], it['rv']))
+        il.append('    { 0x%08Xu, %d, %d, %d, %d, 0x%Xu, 0x%Xu, %s, %s, %s, %d, %d, %d },' % (it['id'], TESTS[t], it.get('units', 1), it['group'], KINDS[it['kind']],
+                  a_, b_, cq(it['name']), cq(it['key']), cq(it['note']), it['nz'], it['rv'], CATI[it['ns']] if it['ns'] else -1))
     cl.append('    { %s, %s, %s, %d, %d, %d, %d, %d, %d, %d, %d },' % (cq(c['key']), cq(c['label']), cq(c['about']), DETAIL[c['detail']], c['spoiler'], c['total'], fi, len(c['items']), gi, len(c['groups']), c['pool']))
 zl = []
 for z in zones:

@@ -25,7 +25,7 @@ struct ZoneDef { const char* name; const char* key; uint32_t district, fact; };
 // test: 0 fact (a = first fact, b = count), 1 narrative object (a = id), 2 reward given (a = id),
 //       3 graph node (a = graph, b = node), 4 weapon form (a = graph, b = form), 5 district level (a = district)
 // kind: 0 can be earned, 1 the game cannot hand it out as it is, 2 comes with an edition, a pre-order or a promotion
-struct ItemDef { uint32_t id; uint8_t test, units; int8_t group; uint8_t kind; uint32_t a, b; const char* name; const char* key; const char* note; int8_t nz, rv; };   // nz: the zone "{z}" in the note stands for, or -1; rv: the ability selection (kReveals) that must be open before the page names the item, or -1
+struct ItemDef { uint32_t id; uint8_t test, units; int8_t group; uint8_t kind; uint32_t a, b; const char* name; const char* key; const char* note; int8_t nz, rv, ns; };   // nz: the zone "{z}" in the note stands for, or -1; rv: the ability selection (kReveals) that must be open before the page names the item, or -1
 // detail: 0 nothing, 1 names of what is missing, 2 a count per group, 3 a side story in parts (a line per zone
 //         and one for its ending; its row reads ??? until something of it is found)
 // pool:   0 a part of the bar of its own; categories with the same number above 0 are one part of the bar together
@@ -185,11 +185,15 @@ struct View {
     bool hideLockedNames = true;             // Artifacts and clothes not owned read ??? (their source stays); an ability does until its selection is open
 };
 
-// An item's note. "{z}" stands for the name of the zone it speaks of, or ??? while that zone is held back.
-inline std::string noteOf(const ItemDef& it, uint32_t zones, int zoneMode) {
+// An item's note. "{z}" stands for the name of the zone it speaks of, or ??? while that zone is held back. "{s}"
+// stands for the title of the side story in parts it speaks of (the category it.ns), or ??? while that story's
+// row reads ???.
+inline std::string noteOf(const ItemDef& it, uint32_t zones, int zoneMode, bool storyShown) {
     std::string s = it.note ? it.note : "";
     size_t at = s.find("{z}");
     if (at != std::string::npos && it.nz >= 0) s.replace(at, 3, (zoneMode == 0 || (zones >> it.nz & 1)) ? kZones[it.nz].name : "???");
+    at = s.find("{s}");
+    if (at != std::string::npos && it.ns >= 0) s.replace(at, 3, storyShown ? kCats[it.ns].label : "???");
     return s;
 }
 
@@ -320,9 +324,10 @@ inline std::string pageJson(const Units& u, const Info& info, const char* const*
             int missing = 0;
             for (int i = cd.firstItem; i < cd.firstItem + cd.itemCount; i++) if (!kItems[i].kind && u[i] < kItems[i].units) missing++;
             bool show = names == 1 || (names == 0 && (!cd.spoiler || storyDone));
-            // Side Stories also names the ones that are done: a thing done gives nothing away.
+            // Main Story Missions and Side Stories also name the ones that are done, in the tables' order: a thing
+            // done gives nothing away.
             bool wrote = false;
-            if (!strcmp(cd.key, "side")) {
+            if (!strcmp(cd.key, "side") || !strcmp(cd.key, "main")) {
                 for (int i = cd.firstItem; i < cd.firstItem + cd.itemCount; i++) {
                     const ItemDef& it = kItems[i];
                     if (it.kind || u[i] < it.units) continue;
@@ -347,11 +352,11 @@ inline std::string pageJson(const Units& u, const Info& info, const char* const*
                         bool says = !anon || (it.note && it.note[0]);
                         if (hide && (pass == 0) != says) continue;
                         if (!first) j += ","; first = false;
-                        j += "["; jstr(j, anon ? "" : it.key); j += ","; jstr(j, anon ? "???" : it.name); j += ","; jstr(j, noteOf(it, info.zones, view.zones)); j += "]";
+                        j += "["; jstr(j, anon ? "" : it.key); j += ","; jstr(j, anon ? "???" : it.name); j += ","; jstr(j, noteOf(it, info.zones, view.zones, it.ns >= 0 && (names == 1 || (names == 0 && storyDone) || haveOf(u, kCats[it.ns]) > 0))); j += "]";
                     }
-                j += "],\"limit\":14";
+                j += "],\"limit\":25";
                 any = true;
-            } else if (missing && names == 0 && cd.spoiler) {
+            } else if (missing && names == 0 && cd.spoiler && strcmp(cd.key, "main")) {      // Main Story Missions has its list of what is done, no sentence
                 if (!strcmp(cd.key, "side")) strcpy_s(buf, "Undiscovered side stories will be listed here after completing the main story.");
                 else if (noTotal) strcpy_s(buf, "What is missing is named here once the main story is finished.");
                 else sprintf_s(buf, "%d still to go. Their names show here once the main story is finished.", missing);

@@ -33,8 +33,9 @@ THE TABS
 
   The tab keys go through all seven tabs, and you can click a tab. In a tab, move up and down
   the list on the left, or point at a row. The middle shows counts per zone, or the names of
-  what is still missing and where it comes from. Side Stories also lists the stories you
-  have completed. Its lists are in alphabetical order.
+  what is still missing and where it comes from. Main Story Missions and Side Stories also
+  list what you have completed: the missions in the story's order, the side stories in
+  alphabetical order.
 
 HOW IT COUNTS
   - The numbers come from the save with the most recent date. They are read again each time

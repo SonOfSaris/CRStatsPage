@@ -18,7 +18,7 @@
 (function () {
     'use strict';
     if (window.__StatsPageArchive) return;
-    var API = window.__StatsPageArchive = { version: 14 };
+    var API = window.__StatsPageArchive = { version: 15 };
 
     var URL = 'coui://base/__statspage__.json';
     var GAME_TABS = 3;
@@ -290,8 +290,12 @@
     // an ::after text as a box of its own, so nothing here leans on either.
     var CYAN = 'rgb(11,232,232)', PAD = '.9259259259vh';
     function cell(label, value, look, tight) {
+        // tight: true for a low row, or a height in vh of a list that has to fit the page (fitRows)
+        var low = typeof tight === 'number' && tight > 0;
+        var height = low ? tight.toFixed(4) + 'vh' : tight ? '2.7777777778vh' : '3.7037037037vh';
+        if (low && tight < 2.7777) height += ';line-height:' + tight.toFixed(4) + 'vh;font-size:' + (tight * 0.8).toFixed(4) + 'vh';
         var right = look === 'note' ? 'color:rgba(232,232,232,.5)' : 'font-weight:700;color:' + (look === 'done' ? CYAN : look === 'dim' ? 'rgba(232,232,232,.35)' : '#e8e8e8');
-        return '<div style="display:flex;flex-direction:row;align-items:center;justify-content:space-between;min-height:' + (tight ? '2.7777777778vh' : '3.7037037037vh') +
+        return '<div style="display:flex;flex-direction:row;align-items:center;justify-content:space-between;min-height:' + height +
                ';padding:0 ' + PAD + ';border-bottom:.0925925926vh solid rgba(232,232,232,.08)">' +
                '<div style="color:rgba(232,232,232,.8)">' + label + '</div><div style="margin-left:1.8518518519vh;' + right + '">' + value + '</div></div>';
     }
@@ -299,6 +303,10 @@
         return '<div style="padding:0 ' + PAD + ';margin-top:' + (first ? '0' : '1.8518518519vh') + ';margin-bottom:.462962963vh;font-weight:700;color:#e8e8e8">' + esc(title) + '</div>';
     }
     function words(text) { return '<div style="padding:.462962963vh ' + PAD + ';color:rgba(232,232,232,.5)">' + esc(text) + '</div>'; }
+    // The height in vh of a row so that a list of <rows> rows fits the page, with <heads> headings beyond its first
+    // and, if <more>, the line that says how many are left out: 0 (the usual row) where that fits, less for a long
+    // list such as every main mission.
+    function fitRows(rows, heads, more) { var h = (60 - 5.1 * heads - (more ? 3.8 : 0)) / rows; return h >= 3.7037037037 ? 0 : Math.max(h, 1.6); }
     function column(body) { return body ? '<div style="display:flex;flex-direction:column;width:51.8518518519vh;margin-top:.6481481481vh">' + body + '</div>' : ''; }
     function countLook(v) { var p = String(v).split(' / '); return (p.length === 2 && p[0] === p[1]) || v === '100%' ? 'done' : ''; }
     // For a row of the DLL's answer: counts per zone, what is missing, what is owned (a row without a total), the
@@ -315,15 +323,16 @@
                 out += cell(esc(tr(d.groups[k][0], d.groups[k][1])), d.groups[k][5] ? esc(d.groups[k][5]) : n, countLook(n));
             }
         }
-        // what is done by name (Side Stories), above what is missing
-        if (d.done && d.done.length) {
+        // what is done by name (Main Story Missions, Side Stories), above what is missing
+        var limit = d.limit || 12, nDone = d.done ? d.done.length : 0, nMiss = d.missing ? d.missing.length : 0, size = 0;
+        if (nDone || nMiss) size = fitRows(nDone + Math.min(nMiss, limit), nDone && nMiss ? 1 : 0, nMiss > limit);
+        if (nDone) {
             out += head('Completed', !out);
-            for (k = 0; k < d.done.length; k++) out += cell(esc(tr(d.done[k][0], d.done[k][1])), '', 'note');
+            for (k = 0; k < nDone; k++) out += cell(esc(tr(d.done[k][0], d.done[k][1])), '', 'note', size);
         }
-        if (d.missing && d.missing.length) {
-            var limit = d.limit || 12;
+        if (nMiss) {
             out += head(d.missingTitle || 'Still Missing', !out);
-            for (k = 0; k < d.missing.length && k < limit; k++) out += cell(esc(tr(d.missing[k][0], d.missing[k][1])), esc(d.missing[k][2] || ''), 'note');
+            for (k = 0; k < d.missing.length && k < limit; k++) out += cell(esc(tr(d.missing[k][0], d.missing[k][1])), esc(d.missing[k][2] || ''), 'note', size);
             if (d.missing.length > limit) out += words('and ' + (d.missing.length - limit) + ' more');
         } else if (d.hidden) out += (out ? '<div style="height:1.3888888889vh"></div>' : '') + words(d.hidden);
         if (d.owned) {

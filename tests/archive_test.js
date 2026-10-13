@@ -321,6 +321,33 @@ check(w.rowText(w.rows()[3]) === 'World Feats' && w.api.state().sel === 3 && /By
           'a SHÜM machine shows its place (1st Place in the colour of a full count), a zone not visited stays ??');
 })();
 
+// ---------------------------------------------------------------- Main Story Missions lists what is completed; a long list gets lower rows
+(function () {
+    var main = page.rows.find(r => r.k === 'main');
+    var keep = JSON.parse(JSON.stringify(main));
+    var names = []; for (var i = 1; i <= 26; i++) names.push('Mission number ' + i);
+    function open(d, v) {
+        main.v = v; main.d = d;
+        w = makeWorld();
+        w.game.frame(3); w.game.openOn(0);
+        w.buttons()[4].fire('click'); w.game.frame(5);
+        return w.details();
+    }
+    var det = open({ done: names.slice(0, 16).map(n => ['', n, '']) }, '16 / ??');
+    check(w.rowText(w.rows()[0]) === 'Main Story Missions' && det.indexOf('Completed') >= 0 && det.indexOf('Mission number 1<') < det.indexOf('Mission number 16<') &&
+          !/What is missing|still to go|Still Missing/.test(det) && (det.match(/min-height:3\.7037037037vh/g) || []).length === 16,
+          'Main Story Missions: 16 completed missions by name under "Completed", in rows of the usual height, no sentence about the rest');
+    det = open({ done: names.map(n => ['', n, '']) }, '26 / 26');
+    var hs = det.match(/min-height:([0-9.]+)vh/g) || [], h = hs.length ? parseFloat(hs[0].slice(11)) : 0;
+    check(hs.length === 26 && hs.every(x => x === hs[0]) && h > 2.2 && h * 26 <= 60.01 && /font-size:1\.8\d+vh/.test(det) && det.indexOf('Mission number 26<') > det.indexOf('Mission number 25<'),
+          'all 26: lower rows so the list fits the page (' + h + 'vh a row, ' + (h * 26).toFixed(1) + 'vh in all)');
+    det = open({ done: names.slice(0, 20).map(n => ['', n, '']), missing: names.slice(20).map(n => ['', n, '']), limit: 14 }, '20 / ??');
+    hs = det.match(/min-height:([0-9.]+)vh/g) || []; h = hs.length ? parseFloat(hs[0].slice(11)) : 0;
+    check(hs.length === 26 && hs.every(x => x === hs[0]) && h * 26 + 5.1 <= 60.01 && det.indexOf('Still Missing') > det.indexOf('Mission number 20<') && det.indexOf('Still Missing') < det.indexOf('Mission number 21<'),
+          'with names shown: Completed, then Still Missing, rows of one height that fit together (' + h + 'vh)');
+    Object.keys(main).forEach(k => delete main[k]); Object.assign(main, keep);
+})();
+
 // ---------------------------------------------------------------- Side Stories lists what is completed, above what is missing or held back
 (function () {
     var side = page.rows.find(r => r.k === 'side');
