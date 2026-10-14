@@ -86,6 +86,19 @@ def item(c, ident, test, name, key='', kind='', note='', group=None, **kw):
     it.update(kw); c['items'].append(it); return it
 def facts(*ns): return [dict(key=byname[n], default=fdefault(n), name=n) for n in ns]
 
+# ---------------------------------------------------------------- what is in the game, and where
+# A fact counts as in the game when the level data names it (factkeyscan.py) or a save at hand has it set.
+key_used = set(r[0] for r in tsv('fact_key_usage_141.tsv') if len(r) > 2 and r[2] != '0')
+ever_set = set(r[0] for r in tsv('facts_ever_set_141.tsv') if r[-1] == '1')
+exists = lambda n: n in key_used or n in ever_set
+ZTOK = {'downtown': 'downtown', 'frontline': 'frontline', 'zonehiss': 'hiss', 'hiss': 'hiss', 'pattern': 'pattern', 'moldtown': 'mold', 'mold': 'mold',
+        'undercity': 'undercity', 'twistedcity': 'twisted', 'twisted': 'twisted'}
+def zone_of(text):
+    """the number of the zone a reward set's name speaks of, -1 for none"""
+    for tok in re.split(r'[_ ]', text):
+        if tok in ZTOK: return ZORDER.index(ZTOK[tok])
+    return -1
+
 # ---------------------------------------------------------------- missions, side stories, tasks, World Feats
 qs, bad = questentries.quests()
 assert not bad
@@ -143,6 +156,28 @@ def speakers_of(q, ef):
         item(c, fact, 'fact', '%s %d' % (zt, n + 1), group=(zk, zt, zn), facts=facts(fact))
     item(c, 'ending', 'fact', 'Ending', group=('', 'Ending', -2), facts=facts(*ef))
     assert len(c['items']) == 6 and len(ef) == 2, (len(c['items']), ef)
+# Dylan's Sketchbook (quest mq_08_sketchbook, whose own title is "[IGNORE THIS. DO NOT TRACK.]": the game shows it
+# only as Sketch markers on the map) is a story in parts as well: every sketch is a hidden entry that hands out a
+# small reward of its zone. The zone is the reward's (the game's own text says "Sketched in the Park" for the one
+# whose facts sit in a folder named after another zone). The record has twelve sketches; the Lighthouse is placed
+# in no level and set in no save, so eleven count, as the game's own achievement does. The story ends by itself
+# with the last sketch. The title is the game's name for the collection the sketches fill; the description is the
+# mod's own. Each sketch is also a collectible of that collection, and counts there as before.
+c_sketch = cat('sketch', "Dylan's Sketchbook", 'Set up the scenes Dylan wants to sketch around Manhattan.', 'parts', 0, pool=1)
+def sketches_of(q, ef):
+    c = c_sketch; found = []
+    for e in q['entries']:
+        sets = [s for s in e['guaranteed'] if s]
+        if not e['isHidden'] or e['completeQuest'] or not sets: continue          # the tracker entry and the end hand out no sketch
+        fact = e['completion']['name']
+        if not exists(fact): continue
+        assert fact in byname and zone_of(sets[0]) >= 0, (e['name'], fact, sets)
+        found.append((zone_of(sets[0]), fact))
+    for zi, fact in sorted(found):
+        zk, zt, zn = zgroup(ZORDER[zi])
+        n = sum(1 for i in c['items'] if i['name'].startswith(zt + ' '))
+        item(c, fact, 'fact', '%s %d' % (zt, n + 1), group=(zk, zt, zn), facts=facts(fact))
+    assert len(c['items']) == 11 and len(ef) == 1, (len(c['items']), ef)
 c_task = cat('tasks', 'FBC Tasks', 'FBC assignments from the task boards.', 'groups')
 c_feat = cat('feats', 'World Feats', 'Small objectives completed in each zone.', 'groups')
 (_o, _c, dblob), = bobj.blobs(d, 'contentgame::DistrictDefinitionDatabase')
@@ -155,13 +190,14 @@ for q in qs:
     elif q['type'] == 1 and 'quest_tag_tasks' in q['tags'] and ef: zoned.append((c_task, q, k, t, ef))
     elif q['name'] in PARTS and ef: parts_of(q, ef)
     elif q['name'] == 'paracriminals' and ef: speakers_of(q, ef)
+    elif q['name'] == 'mq_08_sketchbook' and ef: sketches_of(q, ef)
     elif q['type'] == 1 and ef and not t.startswith('[IGNORE'): item(c_side, q['name'], 'fact', t or pretty(q['name']), k, facts=facts(*ef))
     elif q['type'] == 2 and q['name'] in pool and ef: zoned.append((c_feat, q, k, t, ef))
 for z in ZORDER:
     for c, q, k, t, ef in zoned:
         if zone_in(q['name']) == z: item(c, q['name'], 'fact', t or pretty(q['name']), k, group=zgroup(z), facts=facts(*ef))
 assert len(c_task['items']) + len(c_feat['items']) == len(zoned)
-assert len(c_side['items']) == 12 and all(c['items'] for c in c_parts.values()) and len(c_speakers['items']) == 6, (len(c_side['items']), [len(c['items']) for c in c_parts.values()])
+assert len(c_side['items']) == 12 and all(c['items'] for c in c_parts.values()) and len(c_speakers['items']) == 6 and len(c_sketch['items']) == 11, (len(c_side['items']), [len(c['items']) for c in c_parts.values()])
 # The names in the list of main missions, in the order players get them done. From the same saves:
 # by the fewest main missions done among the saves that have one done, then by how many saves have it.
 MAIN_ORDER = ['dq_s1p1_wake_up', 'dq_s3p1a_enter_the_nightmare', 'dq_s3p1c_rescue_mission', 'app_heat', 'dq_s3p1d_arish_debrief', 'app_gravity', 'app_reach_title',
@@ -196,9 +232,6 @@ for z in ZORDER + ['other']:
 assert len(c_shum['items']) == len(shum)
 
 # ---------------------------------------------------------------- flags the level data names (factkeyscan.py)
-key_used = set(r[0] for r in tsv('fact_key_usage_141.tsv') if len(r) > 2 and r[2] != '0')
-ever_set = set(r[0] for r in tsv('facts_ever_set_141.tsv') if r[-1] == '1')
-exists = lambda n: n in key_used or n in ever_set
 c_enc = cat('encounters', 'World Encounters', 'Distinct enemy encounters around Manhattan.', 'groups')
 c_vend = cat('vending', 'Hiss Vending Machines', 'Hiss-possessed vending machines destroyed.', 'groups')
 for z in ZORDER:
@@ -280,13 +313,6 @@ for q in qs:
     QKIND[n] = ('main' if any(i['ident'] == n for i in c_main['items']) else 'side' if any(i['ident'] == n for i in c_side['items']) else
                 PARTS[n][0] if n in PARTS else 'speakers' if n == 'paracriminals' else 'sketch' if n == 'mq_08_sketchbook' else '')
 STORY_ROWS = set(p[0] for p in PARTS.values()) | {'speakers'}
-ZTOK = {'downtown': 'downtown', 'frontline': 'frontline', 'zonehiss': 'hiss', 'hiss': 'hiss', 'pattern': 'pattern', 'moldtown': 'mold', 'mold': 'mold',
-        'undercity': 'undercity', 'twistedcity': 'twisted', 'twisted': 'twisted'}
-def zone_of(text):
-    """the number of the zone a reward set's name speaks of, -1 for none"""
-    for tok in re.split(r'[_ ]', text):
-        if tok in ZTOK: return ZORDER.index(ZTOK[tok])
-    return -1
 def quest_zone(q):
     for s, qq in SET_QUEST.items():
         if qq == q and zone_of(s) >= 0: return zone_of(s)
@@ -299,19 +325,20 @@ def quest_note(setname, seq=1):
     again = ' in New Game Plus' if seq > 1 else ''
     if kind in ('main', 'side'):
         z = zone_of(setname)
-        return ('{z} ' if z >= 0 else '') + ('main mission' if kind == 'main' else 'side story') + again, z, ''
-    if kind == 'sketch': return 'every Sketch completed', -1, ''          # the hidden quest behind the map's Sketch markers
+        what = ('main mission' if kind == 'main' else 'side story') + again
+        return ('{z} ' + what if z >= 0 else what[0].upper() + what[1:]), z, ''
+    if kind == 'sketch': return 'Every Sketch completed', -1, ''          # the hidden quest behind the map's Sketch markers
     assert kind in STORY_ROWS and not again, (setname, kind, seq)
-    return 'side story: {s}', -1, kind
+    return 'Side story: {s}', -1, kind
 def artifact_note(a, text):
-    if a == 'ch_105_stapler': return 'source unconfirmed', -1, ''
+    if a == 'ch_105_stapler': return 'Source unconfirmed', -1, ''
     ln, nz = level_note(text)
     if ln: return ln, nz, ''
-    if 'sold by a vendor' in text: return 'blueprint sold by a vendor', -1, ''
+    if 'sold by a vendor' in text: return 'Blueprint sold by a vendor', -1, ''
     m = re.search(r'challenge_([a-z_]+?)_(first|second|third)', text)
     if m:           # the machine outside the zones' own sets is not named: its place is held back until the story's end
         z = -1 if 'jrpg' in m.group(1) else zone_of(m.group(1))
-        return ('{z} SH\u00dcM, ' if z >= 0 else 'a SH\u00dcM machine, ') + PLACE[m.group(2)], z, ''
+        return ('{z} SH\u00dcM, ' if z >= 0 else 'A SH\u00dcM machine, ') + PLACE[m.group(2)], z, ''
     for s, rec in re.findall(r'(?:blueprint|artifact): (\S+) record (\d+)', text):
         if s in SET_QUEST: return quest_note(s, int(rec))
     m = re.search(r'world_encounter_\S+', text)
@@ -321,8 +348,8 @@ cosmetics = {}
 for r in tsv('reward_sets_141.tsv'):
     for c in (r[12].split() if len(r) > 12 else []): cosmetics.setdefault(c, []).append(r)
 def outfit_note(rows):
-    if any(r[5] == 'default' for r in rows): return 'owned from the start', -1, ''
-    if any('shop item' in r[7] for r in rows): return 'sold by a vendor', -1, ''
+    if any(r[5] == 'default' for r in rows): return 'Owned from the start', -1, ''
+    if any('shop item' in r[7] for r in rows): return 'Sold by a vendor', -1, ''
     for r in rows:
         for s in cosmetics.get(r[0], []):
             name, category, record, seq = s[0], s[1], s[2], int(s[3] or 0)
@@ -343,7 +370,7 @@ for r in tsv('artifact_sources_141.tsv'):
     k, t = aname(a)
     note, nz, ns = artifact_note(a, good or (r[3] if len(r) > 3 else ''))        # the Spanner's source is in the "broken" column
     item(c_art, a, 'fact', t, k, note=note, nz=nz, ns=ns, facts=facts('charm/' + a))
-assert all(i['note'] and (i['nz'] >= 0) == ('{z}' in i['note']) and bool(i['ns']) == ('{s}' in i['note']) for i in c_art['items'])
+assert all(i['note'] and (i['nz'] >= 0) == ('{z}' in i['note']) and bool(i['ns']) == ('{s}' in i['note']) and not i['note'][0].islower() for i in c_art['items'])
 
 # ---------------------------------------------------------------- outfit pieces
 oflags = {}
@@ -356,9 +383,9 @@ for n in sorted(oflags):
     earn = any(r[5] in ('default', 'in-game') for r in rows) and n != K9
     k, t = loc('OUTFIT_ITEM_' + rows[0][0].upper())
     kind = '' if earn else ('reach' if n == K9 else 'promo')
-    note, nz, ns = ('reward never arrives', -1, '') if n == K9 else outfit_note(rows) if earn else ('', -1, '')
+    note, nz, ns = ('Reward never arrives', -1, '') if n == K9 else outfit_note(rows) if earn else ('', -1, '')
     item(c_out, n, 'fact', t or clean(rows[0][1]), k, kind=kind, note=note, nz=nz, ns=ns, facts=facts(n))
-assert all(i['note'] and (i['nz'] >= 0) == ('{z}' in i['note']) for i in c_out['items'] if not i['kind'])
+assert all(i['note'] and (i['nz'] >= 0) == ('{z}' in i['note']) and not i['note'][0].islower() for i in c_out['items'] if not i['kind'])
 
 # ---------------------------------------------------------------- abilities
 ABIL = {'air_dodge': ('', 'Air Dodge'), 'astral_construct_summon': ('ABILITY_ASTRAL_SUMMON', 'Spike'), 'barrage_ability': ('ABILITY_BARRAGE', 'Barrage'),
@@ -377,15 +404,14 @@ ASET = {'barrage_ability': 'barrage', 'seekers': 'barrage', 'shield': 'barrage',
         'seize': 'psychic'}
 REVEALS = ['barrage', 'dancer', 'heat', 'mold', 'astral', 'psychic']
 reveals = [dict(id=b, fact=facts('ability_select_unlocks/%s_boss_ability_unlocked' % b)[0]) for b in REVEALS]
-# Where an ability comes from. The twelve of the selections: the Resonant whose defeat opens the selection, by its
-# zone. The eight basic moves, from the saves at hand: five are there from the first save on; Perfect Dodge, Gravity
+# Where an ability comes from. The twelve of the selections come with defeating the Resonant entities; the note
+# says no more than that. The eight basic moves, from the saves at hand: five are there from the first save on; Perfect Dodge, Gravity
 # Anomaly and Reach are set in exactly the saves that have one main mission done (The Central Resonant, The
 # Incursion Fault, The Subway Fault).
-BOSS_ZONE = {'barrage': 'downtown', 'heat': 'frontline', 'dancer': 'pattern', 'mold': 'mold', 'astral': 'undercity', 'psychic': 'twisted'}
 BASIC = {'air_dodge': '', 'dash': '', 'dodge': '', 'jump_ability': '', 'surge': '', 'perfect_dodge': 'app_heat', 'gravity_anomaly_ability': 'app_gravity', 'reach': 'app_reach_title'}
 def ability_note(a):
-    if a in ASET: return '{z} Resonant', ZORDER.index(BOSS_ZONE[ASET[a]])
-    if not BASIC[a]: return 'owned from the start', -1
+    if a in ASET: return 'Defeat Resonant entities', -1
+    if not BASIC[a]: return 'Owned from the start', -1
     assert QKIND[BASIC[a]] == 'main' and quest_zone(BASIC[a]) >= 0, a
     return '{z} main mission', quest_zone(BASIC[a])
 c_abi = cat('abilities', 'Abilities', 'Resonant abilities unlocked.', 'missing')

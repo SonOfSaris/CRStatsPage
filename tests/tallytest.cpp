@@ -9,7 +9,7 @@
 #include <cstdio>
 #include "../engine.h"
 
-static const char* const kRowKeys[] = { "total", "main", "side", "mapkits", "science", "freeze", "taxi", "dog", "speakers", "pope",
+static const char* const kRowKeys[] = { "total", "main", "side", "mapkits", "sketch", "science", "freeze", "taxi", "dog", "speakers", "pope",
                                         "levels", "encounters", "vending", "feats", "shum", "tasks", "collectibles", "research",
                                         "artifacts", "outfits", "abilities", "talents", "weapons", "promo" };
 

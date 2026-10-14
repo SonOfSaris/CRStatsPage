@@ -146,8 +146,8 @@ check(w.api.state().tab === 1 && w.lit() === 4 && w.shownPage() && !w.shownGame(
 check(w.game.events.filter(e => e[0] === 'narrative_object_sub_tab_click').map(e => e[1]).join(',') === '1', 'and the game gets one tab change underneath, so the click sounds like one on its own tabs');
 w.game.frame(10);
 check(w.game.tab === 1 && w.api.state().tab === 1 && w.api.state().expect === 0 && w.game.changes === 1, 'the game moved once and is left there, our tab stays');
-check(w.rows().map(w.rowText).join(',') === 'Main Story Missions,Side Stories,Mapping the New New York,Unsupervised Science,Freeze Frame,The Last Taxi,Every Dog Has Her Day,The Complete Set,Pope\'s Research' &&
-      w.rowCounter(w.rows()[0]) === '26/26' && w.rowCounter(w.rows()[1]) === '12/12' && w.rowCounter(w.rows()[2]) === '7/7' && w.rowCounter(w.rows()[4]) === '15/15', 'Story lists its two rows and the seven side stories in parts, with counts (' + w.rows().map(r => w.rowText(r) + ' ' + w.rowCounter(r)).join('; ') + ')');
+check(w.rows().map(w.rowText).join(',') === 'Main Story Missions,Side Stories,Mapping the New New York,Dylan\'s Sketchbook,Unsupervised Science,Freeze Frame,The Last Taxi,Every Dog Has Her Day,The Complete Set,Pope\'s Research' &&
+      w.rowCounter(w.rows()[0]) === '26/26' && w.rowCounter(w.rows()[1]) === '12/12' && w.rowCounter(w.rows()[2]) === '7/7' && w.rowCounter(w.rows()[3]) === '9/11' && w.rowCounter(w.rows()[5]) === '15/15', 'Story lists its two rows and the eight side stories in parts, with counts (' + w.rows().map(r => w.rowText(r) + ' ' + w.rowCounter(r)).join('; ') + ')');
 check(w.game.cells.length >= 5 && w.game.cells.slice(-5).every(c => c.m_disabled === true && c.m_contextId === 'narrative_object_menu' && c.__Type === 'NavigationSetCellArguments'), 'the game\'s five live category cells are switched off');
 
 // events of the hidden page do not reach the game
@@ -164,7 +164,7 @@ check(w.rows().map(w.rowText).join(',') === 'Zone Levels,World Encounters,Hiss V
 press('OnNext');
 check(w.api.state().tab === 3 && w.lit() === 6 && w.rows().length === 6 && w.rowText(w.rows()[5]) === 'Promotional Outfits' && w.rowCounter(w.rows()[5]) === String(page.promo),
       'next: Dylan with five rows and the count of promotion pieces (' + w.rowCounter(w.rows()[5]) + ')');
-check(/Still Missing/.test(w.details()) && />\?\?\?<\/div><div [^>]*>blueprint sold by a vendor</.test(w.details()) && !/Fingerboard/.test(w.details()), 'Artifacts: what is missing reads ???, with where it comes from');
+check(/Still Missing/.test(w.details()) && />\?\?\?<\/div><div [^>]*>Blueprint sold by a vendor</.test(w.details()) && !/Fingerboard/.test(w.details()), 'Artifacts: what is missing reads ???, with where it comes from');
 check(!/menu-context-stats|<span|<p /.test(w.details()) && (w.details().match(/display:flex;flex-direction:row/g) || []).length >= 9, 'the details are rows that lay themselves out: no inline text, no added colon');
 (w.game.listeners.OnNavigateDown || []).forEach(f => f()); (w.game.listeners.OnNavigateDown || []).forEach(f => f()); (w.game.listeners.OnNavigateDown || []).forEach(f => f()); w.game.frame(1);
 check(w.rowText(w.rows()[3]) === 'Talents' && />Unlocked<.*>45<.*>Remaining<.*>27</.test(w.details()) && w.barShown(), 'a row without a list (Talents) says how much is unlocked and how much remains');
@@ -380,7 +380,7 @@ check(w.rowText(w.rows()[3]) === 'World Feats' && w.api.state().sel === 3 && /By
                      ['ZONE_PATTERN', 'West Incursion Zone', 0, 1, 0, 'Not found'], ['ZONE_MOLD', 'The Park', 1, 1, 0, 'Found'], ['ZONE_UNDERCITY', 'Underpass', 0, 1, 0, 'Not found'], ['', '???', 0, 0, 1]];
     // two stories not found yet: the first of the row order and the last
     [['mapkits', 7], ['pope', 8]].forEach(function (x) { var r = pr(x[0]); r.l = '???'; r.v = '0 / ??'; r.f = 0; r.w = [0, x[1]]; r.about = 'A story you have not found yet.'; r.d = {}; });
-    var pooled = ['mapkits', 'science', 'freeze', 'taxi', 'dog', 'speakers', 'pope'].map(pr);
+    var pooled = ['mapkits', 'sketch', 'science', 'freeze', 'taxi', 'dog', 'speakers', 'pope'].map(pr);
     var want = (pr('main').f + pr('side').f + pooled.reduce((a, r) => a + r.w[0], 0) / pooled.reduce((a, r) => a + r.w[1], 0)) / 3;
     var text = (Math.floor(want * 1000) / 10).toFixed(1).replace(/\.0$/, '') + '%';
     w = makeWorld();
@@ -393,15 +393,15 @@ check(w.rowText(w.rows()[3]) === 'World Feats' && w.api.state().sel === 3 && /By
     check(det.indexOf('Side Stories') < det.indexOf('Unsupervised Science') && det.indexOf('Unsupervised Science') < det.indexOf('The Complete Set') && det.indexOf('The Complete Set') < det.indexOf('???') &&
           (det.match(/\?\?\?/g) || []).length === 2, 'Completion, Story selected: its rows in order, the two ??? ones last');
     w.buttons()[4].fire('click'); w.game.frame(5);
-    check(w.rows().map(w.rowText).join(',') === 'Main Story Missions,Side Stories,Unsupervised Science,Freeze Frame,The Last Taxi,Every Dog Has Her Day,The Complete Set,???,???' &&
-          w.rowCounter(w.rows()[7]) === '0/??' && w.rowCounter(w.rows()[8]) === '0/??' && w.rowCounter(w.rows()[4]) === '3/7',
+    check(w.rows().map(w.rowText).join(',') === 'Main Story Missions,Side Stories,Dylan\'s Sketchbook,Unsupervised Science,Freeze Frame,The Last Taxi,Every Dog Has Her Day,The Complete Set,???,???' &&
+          w.rowCounter(w.rows()[8]) === '0/??' && w.rowCounter(w.rows()[9]) === '0/??' && w.rowCounter(w.rows()[5]) === '3/7',
           'Story: a story with nothing found is a row ??? with 0/??, and such rows are at the bottom of the list');
-    for (var i = 0; i < 4; i++) { (w.game.listeners.OnNavigateDown || []).forEach(f => f()); w.game.frame(1); }
+    for (var i = 0; i < 5; i++) { (w.game.listeners.OnNavigateDown || []).forEach(f => f()); w.game.frame(1); }
     det = w.details();
     check(/By Zone/.test(det) && /rgb\(11,232,232\)">Found/.test(det) && />Not found</.test(det) && !/rgb\(11,232,232\)">Not found/.test(det) && />\?\?\?<\/div><div [^>]*>\?\?<\/div>/.test(det) && !/1 \/ 1/.test(det),
           'The Last Taxi: a line per zone, Found in the colour of a full count, Not found plain, a zone not visited ???');
     for (i = 0; i < 4; i++) { (w.game.listeners.OnNavigateDown || []).forEach(f => f()); w.game.frame(1); }
-    check(w.api.state().sel === 8 && !/By Zone|Found/.test(w.details()), 'the ??? row shows no lines');
+    check(w.api.state().sel === 9 && !/By Zone|Found/.test(w.details()), 'the ??? row shows no lines');
 })();
 
 console.log(fails ? 'FAILED' : 'ALL PASSED');

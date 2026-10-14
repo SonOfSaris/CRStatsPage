@@ -15,7 +15,7 @@ SRC = here + '../'
 # The rows of the page's answer, in order: a category key of tables.json, or 'total' / 'promo'. The order of the
 # story and zone rows is the order a player comes to them; ui/statspage_archive.js sorts the rows into its tabs.
 ROWS = ['total',
-        'main', 'side', 'mapkits', 'science', 'freeze', 'taxi', 'dog', 'speakers', 'pope',
+        'main', 'side', 'mapkits', 'sketch', 'science', 'freeze', 'taxi', 'dog', 'speakers', 'pope',
         'levels', 'encounters', 'vending', 'feats', 'shum', 'tasks',
         'collectibles', 'research',
         'artifacts', 'outfits', 'abilities', 'talents', 'weapons',

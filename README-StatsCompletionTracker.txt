@@ -21,7 +21,7 @@ INSTALL
 
 THE TABS
   Completion   the bar for everything and its parts as percentages
-  Story        main story missions, side stories, and a row each for the seven side stories
+  Story        main story missions, side stories, and a row each for the eight side stories
                that come in parts across the zones, with what you found in every zone
   Zones        zone levels, world encounters, Hiss Vending Machines, World Feats, SHUM scores
                (your place on each machine), FBC Tasks

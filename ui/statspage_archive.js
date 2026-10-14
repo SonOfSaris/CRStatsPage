@@ -18,12 +18,12 @@
 (function () {
     'use strict';
     if (window.__StatsPageArchive) return;
-    var API = window.__StatsPageArchive = { version: 15 };
+    var API = window.__StatsPageArchive = { version: 16 };
 
     var URL = 'coui://base/__statspage__.json';
     var GAME_TABS = 3;
     var GAME_KEYS = [['MENU_NARRATIVE_OBJECT_COLLECTIBLES', 'Collectibles'], ['MENU_NARRATIVE_OBJECT_ENEMIES', 'Enemies'], ['MENU_NARRATIVE_OBJECT_TUTORIALS', 'Tutorials']];
-    var ROW_KEYS = ['total', 'main', 'side', 'mapkits', 'science', 'freeze', 'taxi', 'dog', 'speakers', 'pope',
+    var ROW_KEYS = ['total', 'main', 'side', 'mapkits', 'sketch', 'science', 'freeze', 'taxi', 'dog', 'speakers', 'pope',
                     'levels', 'encounters', 'vending', 'feats', 'shum', 'tasks', 'collectibles', 'research',
                     'artifacts', 'outfits', 'abilities', 'talents', 'weapons', 'promo'];
     // The parts the tabs show. Each has a tab of its own, and Completion lists them with their percentages.
@@ -32,7 +32,7 @@
     // "apart" rows are listed in a tab but are no part of the bar (the promotion items: a count, no total).
     // Rows are in the order a player comes to them; a row that reads ??? goes to the bottom of its list (ordered).
     var SECTIONS = [
-        { id: 'story', label: 'Story', about: 'Main story missions and side story missions.', rows: ['main', 'side', 'mapkits', 'science', 'freeze', 'taxi', 'dog', 'speakers', 'pope'] },
+        { id: 'story', label: 'Story', about: 'Main story missions and side story missions.', rows: ['main', 'side', 'mapkits', 'sketch', 'science', 'freeze', 'taxi', 'dog', 'speakers', 'pope'] },
         { id: 'zones', label: 'Zones', about: 'Missions and encounters around Manhattan.', rows: ['levels', 'encounters', 'vending', 'feats', 'shum', 'tasks'] },
         { id: 'dylan', label: 'Dylan', about: 'Dylan\'s stuff.', rows: ['artifacts', 'outfits', 'abilities', 'talents', 'weapons'], apart: ['promo'] }
     ];

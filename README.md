@@ -82,7 +82,7 @@ named in the ini instead. `save.h` reads the save's global chunk: world facts, c
 narrative objects, rewards handed out and the unlock graphs. `tally.h` counts them against the
 tables and writes the page's answer as JSON.
 
-The bar: every kind of thing is one equal part, whatever its size, and the seven side stories in
+The bar: every kind of thing is one equal part, whatever its size, and the eight side stories in
 parts are one part together. That makes 16 parts, and what can be earned fills 99% of the bar.
 The last 1% belongs to one outfit piece that game 1.4.1 never hands out. Outfit pieces from an
 edition, a pre-order or a promotion are counted on the Dylan tab but are not part of the bar.
