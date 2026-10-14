@@ -21,7 +21,7 @@ find, taken from your latest save.
 
 ## Install
 
-Grab `StatsPage.zip` from the [releases](../../releases) and extract it into the game folder
+Grab `StatsCompletionTracker.zip` from the [releases](../../releases) and extract it into the game folder
 (next to `CONTROLResonant.exe`). Everything lands in `crmods\StatsCompletionTracker\`. It needs
 crloader, the `winmm.dll` mod loader, which you already have if you run other DLL mods. Full
 details, and how the bar counts, are in [README-StatsCompletionTracker.txt](README-StatsCompletionTracker.txt).

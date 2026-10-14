@@ -1,8 +1,8 @@
-# Builds dist/release/StatsPage.zip (entries under crmods/StatsCompletionTracker/) from out/statscompletiontracker.dll and the package
+# Builds dist/release/StatsCompletionTracker.zip (entries under crmods/StatsCompletionTracker/) from out/statscompletiontracker.dll and the package
 # files in this folder. usage: python package.py
 import hashlib, os, zipfile
 src = os.path.dirname(os.path.abspath(__file__))
-dst = os.path.join(src, '..', 'dist', 'release', 'StatsPage.zip')
+dst = os.path.join(src, '..', 'dist', 'release', 'StatsCompletionTracker.zip')
 files = [('out/statscompletiontracker.dll', 'statscompletiontracker.dll'), ('statscompletiontracker_config.ini',) * 2, ('statscompletiontracker.menu.json',) * 2,
          ('README-StatsCompletionTracker.txt',) * 2]
 with zipfile.ZipFile(dst, 'w', zipfile.ZIP_DEFLATED, compresslevel=9) as z:
