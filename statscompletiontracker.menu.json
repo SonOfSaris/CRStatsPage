@@ -56,6 +56,13 @@
    "default": true,
    "label": "Show unlock hints",
    "description": "On: a missing Artifact, clothing piece or ability says where it comes from, such as a zone level, a vendor or a side story. Off: these hints read ??? instead."
+  },
+  {
+   "id": "version_warning",
+   "type": "toggle",
+   "default": true,
+   "label": "Warn when the mod cannot start",
+   "description": "Shows a message at start when a game update stops the mod from working. A game update that changes nothing the mod needs shows no message."
   }
  ]
 }

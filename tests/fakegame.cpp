@@ -11,6 +11,9 @@
 //                  (a jump at the function's start): the DLL must find the function behind it, and both run
 //   --inline-next  the same on the handler's neighbour
 //   --next-slot    another mod has taken the vtable entry after the handler's
+//   --warning-off  with --no-pattern: the settings switch the mod's message off, the log must say so
+//   --dialog <bmp> with --no-pattern: the message box is let through; it must come up with its text, a picture
+//                  of it is saved, and the rig closes it
 // Writes <out>\script.js, <out>\template.html, <out>\page.json (what came out of the handler chain).
 #define _CRT_SECURE_NO_WARNINGS
 #include <windows.h>
@@ -125,6 +128,40 @@ static void installOther() {
     VirtualProtect((void*)slot, 8, old, &old);
 }
 
+// The mod's message box, once it is up: a dialog of this process with the mod's name and version as its title.
+static HWND findDialog() {
+    HWND w = nullptr;
+    while ((w = FindWindowExW(nullptr, w, L"#32770", L"Stats & Completion Tracker 1.0")) != nullptr) {
+        DWORD pid = 0; GetWindowThreadProcessId(w, &pid);
+        if (pid == GetCurrentProcessId() && IsWindowVisible(w)) return w;
+    }
+    return nullptr;
+}
+static BOOL CALLBACK collectText(HWND w, LPARAM out) {
+    wchar_t buf[4096] = L""; GetWindowTextW(w, buf, 4096);
+    char utf[8192] = ""; WideCharToMultiByte(CP_UTF8, 0, buf, -1, utf, sizeof utf, nullptr, nullptr);
+    *(std::string*)out += utf; *(std::string*)out += "\n";
+    return TRUE;
+}
+// a picture of a window as it is drawn, as a .bmp
+static bool saveWindow(HWND w, const char* path) {
+    RECT r; GetWindowRect(w, &r);
+    int cx = r.right - r.left, cy = r.bottom - r.top;
+    HDC screen = GetDC(nullptr); HDC mem = CreateCompatibleDC(screen);
+    BITMAPINFO bi{}; bi.bmiHeader.biSize = sizeof bi.bmiHeader; bi.bmiHeader.biWidth = cx; bi.bmiHeader.biHeight = -cy;
+    bi.bmiHeader.biPlanes = 1; bi.bmiHeader.biBitCount = 32;
+    void* bits = nullptr; HBITMAP bmp = CreateDIBSection(screen, &bi, DIB_RGB_COLORS, &bits, nullptr, 0);
+    if (!bmp) return false;
+    HGDIOBJ old = SelectObject(mem, bmp);
+    BOOL ok = PrintWindow(w, mem, 2);        // PW_RENDERFULLCONTENT
+    GdiFlush();
+    BITMAPFILEHEADER fh{}; fh.bfType = 0x4D42; fh.bfOffBits = sizeof fh + sizeof bi.bmiHeader; fh.bfSize = fh.bfOffBits + (DWORD)(cx * cy * 4);
+    FILE* f = fopen(path, "wb");
+    if (f) { fwrite(&fh, sizeof fh, 1, f); fwrite(&bi.bmiHeader, sizeof bi.bmiHeader, 1, f); fwrite(bits, 4, (size_t)cx * cy, f); fclose(f); }
+    SelectObject(mem, old); DeleteObject(bmp); DeleteDC(mem); ReleaseDC(nullptr, screen);
+    return ok && f;
+}
+
 // Another mod that hooks a function the way hook libraries do: a jump at the function's start to a relay near
 // the image, which jumps on to the mod's function; the instruction the jump replaced lives on in a trampoline
 // that jumps back behind it.
@@ -196,8 +233,11 @@ static bool has(const std::string& s, const char* part) { return s.find(part) !=
 int main(int argc, char** argv) {
     if (argc < 5) { printf("usage: fakegame <dll folder> <script> <template> <out folder> [--mod-first] [--no-pattern]\n"); return 2; }
     std::string dir = argv[1], out = argv[4];
-    bool modFirst = false, noPattern = false, trace = false, inlineFirst = false, inlineNext = false, nextSlot = false;
+    bool modFirst = false, noPattern = false, trace = false, inlineFirst = false, inlineNext = false, nextSlot = false, warningOff = false;
+    std::string dialogShot;
     for (int i = 5; i < argc; i++) {
+        if (!strcmp(argv[i], "--warning-off")) warningOff = true;
+        if (!strcmp(argv[i], "--dialog") && i + 1 < argc) dialogShot = argv[++i];
         if (!strcmp(argv[i], "--mod-first")) modFirst = true; if (!strcmp(argv[i], "--no-pattern")) noPattern = true; if (!strcmp(argv[i], "--trace")) trace = true;
         if (!strcmp(argv[i], "--inline-first")) inlineFirst = true; if (!strcmp(argv[i], "--inline-next")) inlineNext = true; if (!strcmp(argv[i], "--next-slot")) nextSlot = true;
     }
@@ -215,12 +255,37 @@ int main(int argc, char** argv) {
 
     std::string logPath = dir + "\\statscompletiontracker.log";
     DeleteFileA(logPath.c_str());
+    // the mod's message box stays shut unless this run is the one that looks at it
+    SetEnvironmentVariableA("STATSCOMPLETIONTRACKER_NO_DIALOGS", dialogShot.empty() ? "1" : nullptr);
     HMODULE mod = LoadLibraryA((dir + "\\statscompletiontracker.dll").c_str());
     check(mod != nullptr, "the DLL loads");
     if (!mod) return 1;
     if (noPattern) {
+        if (!dialogShot.empty()) {
+            HWND box = nullptr;
+            check(waitFor([&] { return (box = findDialog()) != nullptr; }, 6000), "the mod's message box comes up, titled with its name and version");
+            if (box) {
+                std::string text; EnumChildWindows(box, collectText, (LPARAM)&text);
+                check(has(text, "Stats & Completion Tracker is switched off for this session. The game itself is not affected.") &&
+                      has(text, "Problem: the UI file handler's neighbour was not found in the game's code") &&
+                      has(text, "does not know this game version") && has(text, "VersionWarning=0"), "the box says what is off, why, and how to stop it");
+                check(!has(readFile(logPath), "unloading this copy"), "the mod waits for the box");
+                Sleep(500);                                  // let it draw
+                check(saveWindow(box, dialogShot.c_str()), "rig: a picture of the box is saved");
+                PostMessageW(box, WM_CLOSE, 0, 0);           // an OK-only box closes on WM_CLOSE
+            }
+        }
         check(waitFor([&] { return has(readFile(logPath), "unloading this copy"); }, 6000), "without the handler in the exe the DLL says so and leaves");
-        check(has(readFile(logPath), "UI file handler's neighbour was found 0 times"), "and the log names what was missing");
+        std::string log = readFile(logPath);
+        check(has(log, "the UI file handler's neighbour was not found in the game's code"), "and the log names what was missing");
+        check(has(log, !dialogShot.empty() ? "] message:" : warningOff ? "] message (not shown: VersionWarning=0):" : "] message (not shown: dialogs are off):"),
+              !dialogShot.empty() ? "the log says the message was shown" : warningOff ? "the settings switch the message off, and the log says so" : "the log says the message was held back by the test");
+        check(has(log, "  | Stats & Completion Tracker is switched off for this session. The game itself is not affected.") && has(log, "  | Mod version: 1.0") &&
+              has(log, "  | Game version: unknown to this mod") && has(log, "  | Problem: the UI file handler's neighbour was not found in the game's code") &&
+              has(log, "does not know this game version") && has(log, "  | - the text of statscompletiontracker.log, in crmods\\StatsCompletionTracker"),
+              "the message's text is in the log, shown or not");
+        check(has(log, "not a build this version knows, trying anyway") && has(log, "platform: ") && has(log, "other mod files loaded: "),
+              "the log tells the build is not a known one, and what a report needs");
         Sleep(300);
         check(GetModuleHandleA("statscompletiontracker.dll") == nullptr, "the DLL is gone from the process");
         FakeResponse r; uiRequest("coui://base/uiresources/game/ui/globals_island.bundle.js", r);
@@ -230,10 +295,11 @@ int main(int argc, char** argv) {
     }
     check(waitFor([&] { return has(readFile(logPath), "active: Stats & Completion Tracker 1.0"); }, 8000), "the DLL finds the handler entry and becomes active");
     check(has(readFile(logPath), modFirst ? "in front of another mod's" : "in front of the game's"), "the log says whose handler it stands in front of");
+    check(!has(readFile(logPath), "] message") && findDialog() == nullptr, "a game the mod runs in gets no message, whatever its build");
     if (inlineFirst) check(has(lineWith(readFile(logPath), "UI file handler at rva"), "behind a hook of fakegame.exe: that mod got to the function first, both run"),
                            "the handler was found behind the other mod's hook, and the log names that mod");
     else check(!has(lineWith(readFile(logPath), "UI file handler at rva"), "behind a hook"), "no hook is reported on a handler that has none");
-    if (inlineNext) check(has(lineWith(readFile(logPath), "UI file handler's neighbour at rva"), "behind a hook of fakegame.exe") && !has(readFile(logPath), "found 0 times"),
+    if (inlineNext) check(has(lineWith(readFile(logPath), "UI file handler's neighbour at rva"), "behind a hook of fakegame.exe") && !has(readFile(logPath), "was not found"),
                           "the neighbour was found behind the other mod's hook as well");
     if (nextSlot) check(has(readFile(logPath), "the entry after the handler's holds another mod's function"), "the handler's entry was found although the entry after it is another mod's");
 

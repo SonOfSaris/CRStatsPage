@@ -9,5 +9,5 @@ if errorlevel 1 exit /b 1
 if not exist out\steam mkdir out\steam
 cl /nologo /O2 /W3 /EHsc /std:c++17 /MT fakesteam.cpp /Fo:out\ /LD /link /OUT:out\steam\steam_api64.dll /IMPLIB:out\steam\fakesteam.lib kernel32.lib
 if errorlevel 1 exit /b 1
-cl /nologo /O2 /W3 /EHsc /std:c++17 /MT fakegame.cpp /Fo:out\ /Fe:out\fakegame.exe /link /MERGE:.patt=.text user32.lib kernel32.lib
+cl /nologo /O2 /W3 /EHsc /std:c++17 /MT fakegame.cpp /Fo:out\ /Fe:out\fakegame.exe /link /MERGE:.patt=.text user32.lib gdi32.lib kernel32.lib
 exit /b %errorlevel%

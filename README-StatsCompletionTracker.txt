@@ -16,8 +16,10 @@ INSTALL
      If you have a crmods\StatsPage folder or statspage files from an earlier download,
      delete them.
   2. Start the game, open the menu and go to Archives.
-  Made for game version 1.4.1. The mod changes no game code and no save. If a later update
-  changes the menus, the mod leaves them as they are and says so in its log.
+  Made for game version 1.4.1. The mod changes no game code and no save. After a game update
+  the mod still runs if the code it needs is unchanged, and shows no message. If an update
+  stops the mod from working, it leaves the game's menus as they are and a message at start
+  says so.
 
 THE TABS
   Completion   the bar for everything and its parts as percentages
@@ -72,6 +74,7 @@ SETTINGS
   With Mod Settings Menu: Options > MODS > Stats & Completion Tracker; a choice made in the menu
   wins over the ini.
   There you choose what the pages hold back (see above) and can switch the mod off.
+  VersionWarning=0 ("Warn when the mod cannot start" in the menu) stops the message at start.
   If the pages say they found no save (a copy of the game that does not use Steam), name your
   save folder under [Saves] Folder in the ini.
 

@@ -24,17 +24,18 @@ def check(ok, what):
     print('%s  %s' % ('PASS' if ok else 'FAIL', what))
     if not ok: fails.append(what)
 def win(p): return os.path.normpath(p)
-def stage(name, saves, more='', page='', menu=''):
+os.environ['STATSCOMPLETIONTRACKER_NO_DIALOGS'] = '1'      # the mod's one message box stays shut in whatever these tests start
+def stage(name, saves, more='', page='', menu='', general=''):
     d = work + name + '/'
     shutil.rmtree(d, ignore_errors=True); os.makedirs(d)
     shutil.copy(src + 'out/statscompletiontracker.dll', d)
-    with open(d + 'statscompletiontracker_config.ini', 'w') as f: f.write('[General]\nEnabled=1\n[Page]\nMissingNames=0\n%s[Saves]\nFolder=%s\n' % (page, win(saves)) + more)
+    with open(d + 'statscompletiontracker_config.ini', 'w') as f: f.write('[General]\nEnabled=1\n%s[Page]\nMissingNames=0\n%s[Saves]\nFolder=%s\n' % (general, page, win(saves)) + more)
     if menu:        # what Mod Settings Menu saves of the player's choices
         os.makedirs(d + 'ModMenuConfig')
         with open(d + 'ModMenuConfig/statscompletiontracker.ini', 'w') as f: f.write('[Settings]\n' + menu)
     return d
-def run_host(name, saves, *flags, page='', menu=''):
-    d = stage(name, saves, '[Archives]\nTrace=1\n' if '--trace' in flags else '', page, menu)
+def run_host(name, saves, *flags, page='', menu='', general=''):
+    d = stage(name, saves, '[Archives]\nTrace=1\n' if '--trace' in flags else '', page, menu, general)
     r = subprocess.run([here + 'out/fakegame.exe', win(d), win(SCRIPT), win(TEMPLATE), win(d + 'files')] + list(flags), capture_output=True, text=True, timeout=120)
     print('--- fakegame %s %s' % (name, ' '.join(flags)))
     for l in r.stdout.splitlines():
@@ -46,6 +47,12 @@ saves = sys.argv[1]
 d = run_host('alone', saves)
 d2 = run_host('behind', saves, '--mod-first')
 run_host('nopattern', saves, '--no-pattern')
+# the message for a game the mod cannot run in: switched off in the ini, switched off in the MODS menu's file,
+# and once for real (the box comes up for a moment; the rig reads it, saves a picture of it and closes it)
+run_host('nopattern_quiet', saves, '--no-pattern', '--warning-off', general='VersionWarning=0\n')
+run_host('nopattern_quiet_menu', saves, '--no-pattern', '--warning-off', menu='version_warning=0\n')
+d_box = run_host('dialog', saves, '--no-pattern', '--dialog', win(work + 'dialog/message.bmp'))
+check(os.path.getsize(d_box + 'message.bmp') > 100000, 'the picture of the message box is there')
 run_host('traced', saves, '--trace')
 # other mods that got to the game's functions first: a hook library's jump on the handler and on its neighbour,
 # the same behind a mod that also took the vtable entry, and a mod's function in the entry after the handler's

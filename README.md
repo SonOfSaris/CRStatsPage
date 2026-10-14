@@ -26,9 +26,11 @@ Grab `StatsCompletionTracker.zip` from the [releases](../../releases) and extrac
 crloader, the `winmm.dll` mod loader, which you already have if you run other DLL mods. Full
 details, and how the bar counts, are in [README-StatsCompletionTracker.txt](README-StatsCompletionTracker.txt).
 
-Made for game version 1.4.1. The mod shows no messages: if a later update moves the code it
-needs, it leaves the game's menus as they are and says so in
-`crmods\StatsCompletionTracker\statscompletiontracker.log`.
+Made for game version 1.4.1. After a game update the mod still runs if the code it needs is
+unchanged, and shows no message. If an update moves that code, the mod leaves the game's menus as
+they are, and one message at start says what is off, with the versions and what a report should
+contain. The same text goes into `crmods\StatsCompletionTracker\statscompletiontracker.log`.
+`VersionWarning=0` in the ini, or the switch under Options > MODS, stops the message.
 It works next to other mods that change the same menu files, Mod Settings Menu among them, and
 next to mods that hook the same game functions.
 

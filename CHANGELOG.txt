@@ -9,4 +9,5 @@ Stats & Completion Tracker changelog
       story things not done yet, story totals, zones not visited, names of locked items); each of these is
       a setting in statscompletiontracker_config.ini or under Options > MODS (Mod Settings Menu). The mod
       changes no game code and no save, and it works next to other mods that use the same menu files or
-      hook the same game functions. Made for game version 1.4.1.
+      hook the same game functions. Made for game version 1.4.1: if a later game update stops the mod
+      from working, a message at start says so (VersionWarning=0 switches it off).

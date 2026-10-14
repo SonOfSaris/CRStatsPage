@@ -16,13 +16,17 @@
 // and are counted against tables made from the game's data (tally.h, tables.inc). Nothing in the game is read
 // or written while it runs, and no save is ever written.
 #include <windows.h>
+#include <tlhelp32.h>
 #include <atomic>
 #include <cstdarg>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <ctime>
+#include <cwctype>
 #include <share.h>
 #include <string>
+#include <vector>
 #include "engine.h"
 
 namespace {
@@ -50,6 +54,7 @@ DWORD g_t0 = 0;
 HANDLE g_instanceMutex = nullptr;
 
 std::atomic<int> g_enabled{1};
+std::atomic<int> g_versionWarning{1};        // [General] VersionWarning: a message at start when the mod cannot run in this game
 std::atomic<int> g_names{0};                 // names of missing story things: 0 once the story is done, 1 always, 2 never
 std::atomic<int> g_storyTotals{1};           // [Page] HideStoryTotals: the story rows read "25 / ??" until all is done
 std::atomic<int> g_zones{1};                 // [Page] UnvisitedZones: 0 named, 1 shown as ???, 2 left out
@@ -99,13 +104,14 @@ bool menuNum(const wchar_t* key, double& v, const std::wstring& file) {
 
 void loadSettings(bool first) {
     std::wstring f = iniPath(), m = menuPath();
-    int enabled = iniInt(L"General", L"Enabled", 1, f) != 0;
+    int enabled = iniInt(L"General", L"Enabled", 1, f) != 0, warning = iniInt(L"General", L"VersionWarning", 1, f) != 0;
     int names = iniInt(L"Page", L"MissingNames", 0, f);
     int totals = iniInt(L"Page", L"HideStoryTotals", 1, f) != 0, zones = iniInt(L"Page", L"UnvisitedZones", 1, f), lockedNames = iniInt(L"Page", L"HideLockedNames", 1, f) != 0;
     int hints = iniInt(L"Page", L"UnlockHints", 1, f) != 0;
     int hold = iniInt(L"Archives", L"HoldGameList", 1, f) != 0, trace = iniInt(L"Archives", L"Trace", 0, f) != 0;
     int fromMenu = 0; double v;
     if (menuNum(L"enabled", v, m)) { enabled = v != 0; fromMenu++; }
+    if (menuNum(L"version_warning", v, m)) { warning = v != 0; fromMenu++; }
     if (menuNum(L"missing_names", v, m)) { names = (int)v; fromMenu++; }
     if (menuNum(L"hide_story_totals", v, m)) { totals = v != 0; fromMenu++; }
     if (menuNum(L"unvisited_zones", v, m)) { zones = (int)v; fromMenu++; }
@@ -120,11 +126,13 @@ void loadSettings(bool first) {
         g_enabled = enabled;
     }
     bool changed = first || names != g_names.load() || hold != g_hold.load() || trace != g_trace.load() ||
-                   totals != g_storyTotals.load() || zones != g_zones.load() || lockedNames != g_lockedNames.load() || hints != g_hints.load();
+                   totals != g_storyTotals.load() || zones != g_zones.load() || lockedNames != g_lockedNames.load() || hints != g_hints.load() ||
+                   warning != g_versionWarning.load();
     if (changed)
-        logf("settings: Enabled=%d MissingNames=%d HideStoryTotals=%d UnvisitedZones=%d HideLockedNames=%d UnlockHints=%d HoldGameList=%d Trace=%d (%d from the MODS menu)%s", g_enabled.load(),
-             names, totals, zones, lockedNames, hints, hold, trace, fromMenu,
+        logf("settings: Enabled=%d VersionWarning=%d MissingNames=%d HideStoryTotals=%d UnvisitedZones=%d HideLockedNames=%d UnlockHints=%d HoldGameList=%d Trace=%d (%d from the MODS menu)%s", g_enabled.load(),
+             warning, names, totals, zones, lockedNames, hints, hold, trace, fromMenu,
              !first && enabled != g_enabled.load() ? "; Enabled changes with the next start of the game" : "");
+    g_versionWarning = warning;
     g_names = names; g_storyTotals = totals; g_zones = zones; g_lockedNames = lockedNames; g_hints = hints; g_hold = hold; g_trace = trace;
 }
 
@@ -306,6 +314,51 @@ bool parsePattern(const char* s, std::string& bytes, std::string& mask) {
     return !bytes.empty();
 }
 
+// ---------------------------------------------------------------- the game build, and what went wrong
+// Game builds the start-up lookups were checked on (tools/lookupcheck.py), by PE timestamp, with the version
+// the game calls them. Any other build is tried all the same: the lookups decide whether the mod can run,
+// not the timestamp.
+struct KnownBuild { DWORD stamp; const char* version; };
+const KnownBuild kKnownBuilds[] = { { 0x6ABA5BB8, "1.4.0" },
+                                    { 0x6ABEF018, "1.4.1" } };
+bool g_buildKnown = false;
+std::string g_gameVersion, g_fileVersion, g_buildDate;      // of the game's exe; filled by findText
+std::string g_problems;                                     // what stopped the mod, for the message
+
+// Something the mod needs is not there: into the log, and kept for the message.
+void problem(const char* fmt, ...) {
+    char buf[400]; va_list ap; va_start(ap, fmt); vsnprintf(buf, sizeof buf, fmt, ap); va_end(ap);
+    logf("%s", buf);
+    if (!g_problems.empty()) g_problems += "; ";
+    g_problems += buf;
+}
+
+// File version of an image from its version resource ("0.564.478.0"); empty when it has none. The game's
+// files carry no other version: the number the game shows is only known for the builds listed above.
+std::string fileVersionOf(HMODULE img) {
+    HRSRC res = FindResourceW(img, MAKEINTRESOURCEW(1), MAKEINTRESOURCEW(16));      // RT_VERSION
+    HGLOBAL h = res ? LoadResource(img, res) : nullptr;
+    const uint8_t* p = h ? (const uint8_t*)LockResource(h) : nullptr;
+    DWORD n = p ? SizeofResource(img, res) : 0;
+    for (DWORD i = 0; i + 16 <= n; i += 4) {
+        uint32_t sig; memcpy(&sig, p + i, 4);
+        if (sig != 0xFEEF04BD) continue;                    // start of VS_FIXEDFILEINFO; the file version follows at +8
+        uint32_t ms, ls; memcpy(&ms, p + i + 8, 4); memcpy(&ls, p + i + 12, 4);
+        char out[64]; sprintf_s(out, "%u.%u.%u.%u", ms >> 16, ms & 0xffff, ls >> 16, ls & 0xffff);
+        return out;
+    }
+    return "";
+}
+
+// The day an image was built, from its PE timestamp: "1 October 2026".
+std::string dateOf(DWORD stamp) {
+    static const char* months[] = { "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December" };
+    time_t t = stamp; struct tm d{};
+    if (gmtime_s(&d, &t)) return "";
+    char out[40]; sprintf_s(out, "%d %s %d", d.tm_mday, months[d.tm_mon], 1900 + d.tm_year);
+    return out;
+}
+
 const uint8_t* g_text = nullptr; size_t g_textSize = 0; uintptr_t g_textRva = 0;   // the game's .text section
 uint8_t* g_exe = nullptr; size_t g_exeSize = 0;
 
@@ -314,11 +367,15 @@ bool findText() {
     auto* dos = (IMAGE_DOS_HEADER*)exe;
     auto* nt = (IMAGE_NT_HEADERS*)((uint8_t*)exe + dos->e_lfanew);
     g_exe = (uint8_t*)exe; g_exeSize = nt->OptionalHeader.SizeOfImage;
-    logf("exe %p timestamp 0x%08X", exe, nt->FileHeader.TimeDateStamp);
+    DWORD stamp = nt->FileHeader.TimeDateStamp;
+    for (const KnownBuild& b : kKnownBuilds) if (b.stamp == stamp) { g_buildKnown = true; g_gameVersion = b.version; }
+    g_fileVersion = fileVersionOf(exe); g_buildDate = dateOf(stamp);
+    logf("exe %p timestamp 0x%08X (%s), file version %s: %s%s", exe, stamp, g_buildDate.c_str(), g_fileVersion.empty() ? "none" : g_fileVersion.c_str(),
+         g_buildKnown ? "game version " : "not a build this version knows, trying anyway", g_buildKnown ? g_gameVersion.c_str() : "");
     auto* sec = IMAGE_FIRST_SECTION(nt);
     for (unsigned i = 0; i < nt->FileHeader.NumberOfSections; i++)
         if (memcmp(sec[i].Name, ".text", 5) == 0) { g_text = (uint8_t*)exe + sec[i].VirtualAddress; g_textSize = sec[i].Misc.VirtualSize; g_textRva = sec[i].VirtualAddress; break; }
-    if (!g_text) logf("no .text section");
+    if (!g_text) problem("the game's code section was not found");
     return g_text != nullptr;
 }
 
@@ -406,7 +463,8 @@ uint8_t* findOnce(const char* pattern, const char* what) {
         if (k == n) { if (!count) first = i; count++; }
     }
     if (count == 0) { if (uint8_t* p = findBehindHook(b, m, what)) return p; }
-    if (count != 1) { logf("%s was found %d times (game build changed, or another mod rewrote it?)", what, count); return nullptr; }
+    if (count == 0) { problem("the %s was not found in the game's code", what); return nullptr; }
+    if (count != 1) { problem("the %s was found %d times in the game's code", what, count); return nullptr; }
     logf("%s at rva 0x%llx", what, (unsigned long long)(g_textRva + first));
     return (uint8_t*)g_text + first;
 }
@@ -435,7 +493,7 @@ void** findResourceSlot(const uint8_t* handler, const uint8_t* next) {
                 found = p + k; count++;
             }
         }
-    if (count != 1) { logf("the UI's resource handler entry was found %d times", count); return nullptr; }
+    if (count != 1) { problem("the UI file handler's vtable entry was found %d times", count); return nullptr; }
     if (pass == 2) logf("the entry after the handler's holds another mod's function: the handler's entry is known by the handler itself");
     return found;
 }
@@ -443,9 +501,9 @@ void** findResourceSlot(const uint8_t* handler, const uint8_t* next) {
 // Our function goes into the entry, in front of what is there. Done a little after the start, when the
 // other mods that use the entry have taken their turn, and long before the UI asks for its files.
 bool installResource() {
-    if (!makeProxyVtable()) { logf("no memory for the response stand-in"); return false; }
+    if (!makeProxyVtable()) { problem("no memory for the response stand-in"); return false; }
     DWORD old;
-    if (!VirtualProtect(g_resourceSlot, sizeof(void*), PAGE_READWRITE, &old)) { logf("the handler entry cannot be changed"); return false; }
+    if (!VirtualProtect(g_resourceSlot, sizeof(void*), PAGE_READWRITE, &old)) { problem("the UI file handler's vtable entry cannot be changed"); return false; }
     void* there = *g_resourceSlot;
     g_prevResource = (ResourceFn)there;
     for (;;) {                               // if someone else changed it in this instant, go in front of that
@@ -476,6 +534,98 @@ DWORD unloadSelf() {
     return 0;
 }
 
+// ---------------------------------------------------------------- what a bug report needs
+// Where the game came from and which other mod files are loaded, as far as this copy can see. Written once,
+// when the mod has either started or given up: by then the mod loader has loaded everything.
+void logEnvironment() {
+    wchar_t exe[MAX_PATH] = L""; GetModuleFileNameW(nullptr, exe, MAX_PATH);
+    std::wstring game = exe; game = game.substr(0, game.find_last_of(L"\\/") + 1);
+    const char* store = GetModuleHandleW(L"steam_api64.dll") ? "Steam (steam_api64.dll is loaded)"
+                      : GetModuleHandleW(L"EOSSDK-Win64-Shipping.dll") ? "Epic Games Store (EOSSDK-Win64-Shipping.dll is loaded)"
+                      : GetModuleHandleW(L"Galaxy64.dll") ? "GOG (Galaxy64.dll is loaded)"
+                      : wcsstr(exe, L"\\WindowsApps\\") ? "Microsoft Store (the game is under WindowsApps)"
+                      : "not recognised (no Steam, Epic or GOG library is loaded)";
+    logf("platform: %s; game folder %ls", store, game.c_str());
+    // DLLs in the game folder under these names stand in for Windows libraries: mod loaders, ReShade and the like
+    static const wchar_t* proxies[] = { L"winmm.dll", L"version.dll", L"dinput8.dll", L"dxgi.dll", L"d3d11.dll", L"d3d12.dll", L"dwmapi.dll",
+                                        L"winhttp.dll", L"wininet.dll", L"dsound.dll", L"xinput1_3.dll", L"xinput1_4.dll", L"xinput9_1_0.dll",
+                                        L"opengl32.dll", L"dbghelp.dll" };
+    std::vector<std::wstring> mods;
+    for (int attempt = 0; attempt < 5; attempt++) {
+        HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE, 0);
+        if (snap == INVALID_HANDLE_VALUE) { if (GetLastError() == ERROR_BAD_LENGTH) continue; break; }
+        MODULEENTRY32W me; me.dwSize = sizeof me;
+        if (Module32FirstW(snap, &me)) do {
+            if (me.hModule == g_self || !_wcsicmp(me.szExePath, exe) || _wcsnicmp(me.szExePath, game.c_str(), game.size())) continue;
+            std::wstring rel = me.szExePath + game.size(), low = rel;
+            for (auto& ch : low) ch = (wchar_t)towlower(ch);
+            size_t dot = low.find_last_of(L'.');
+            std::wstring ext = dot == std::wstring::npos ? L"" : low.substr(dot);
+            bool mod = low.compare(0, 7, L"crmods\\") == 0 || ext == L".asi" || ext == L".addon64" || ext == L".addon";
+            if (low.find(L'\\') == std::wstring::npos) for (const wchar_t* p : proxies) if (low == p) mod = true;
+            if (!mod) continue;
+            WIN32_FILE_ATTRIBUTE_DATA fa{}; SYSTEMTIME st{}; wchar_t line[MAX_PATH + 80];
+            if (GetFileAttributesExW(me.szExePath, GetFileExInfoStandard, &fa) && FileTimeToSystemTime(&fa.ftLastWriteTime, &st))
+                swprintf_s(line, L"%s (%lu bytes, %04u-%02u-%02u)", rel.c_str(), fa.nFileSizeLow, st.wYear, st.wMonth, st.wDay);
+            else swprintf_s(line, L"%s (renamed or removed since it was loaded)", rel.c_str());
+            mods.push_back(line);
+        } while (Module32NextW(snap, &me));
+        CloseHandle(snap);
+        break;
+    }
+    logf("other mod files loaded: %d%s", (int)mods.size(),
+         mods.empty() ? "" : " (everything under crmods, .asi files, ReShade add-ons, and stand-in DLLs in the game folder)");
+    for (const std::wstring& m : mods) logf("  %ls", m.c_str());
+}
+
+// ---------------------------------------------------------------- the message
+std::wstring wide(const std::string& s) { return std::wstring(s.begin(), s.end()); }       // plain ASCII only
+bool dialogs() { return GetEnvironmentVariableW(L"STATSCOMPLETIONTRACKER_NO_DIALOGS", nullptr, 0) == 0; }   // tests switch the pop-up off
+
+// The one message box of this mod, for a game the mod cannot run in: what happened, the versions, the problem,
+// the likely cause and what a report should contain. The text goes into the log as well, shown or not.
+// A function that is missing in a game version the lookups were checked on has been changed in memory: that
+// is another mod or tool, not an update.
+void showMessage() {
+    std::wstring name = wide(kName), version = wide(kVersion);
+    std::wstring game = g_buildKnown ? wide(g_gameVersion) : L"unknown to this mod";
+    if (!g_fileVersion.empty()) game += L" (file version " + wide(g_fileVersion) + L")";
+    std::wstring cause = g_buildKnown
+        ? name + L" supports this game version, so a game update is not the cause. Most likely another mod or tool has changed the "
+          L"game code the mod needs. Try the game without your other mods to find out which one.\n\n"
+        : name + L" " + version + L" does not know this game version. A game update has probably changed the code the mod needs: "
+          L"look for a newer version of the mod first.\n\n";
+    std::wstring msg = name + L" is switched off for this session. The game itself is not affected.\n\n"
+        L"Mod version: " + version + L"\n"
+        L"Game version: " + game + L"\n"
+        L"Game build date: " + wide(g_buildDate) + L"\n"
+        L"Problem: " + wide(g_problems.empty() ? std::string("not known") : g_problems) + L"\n\n" +
+        cause +
+        L"If you report this, please include:\n"
+        L"- this message (Ctrl+C copies it)\n"
+        L"- where you got the game: Steam, Epic or other\n"
+        L"- the other mods you use\n"
+        L"- the text of statscompletiontracker.log, in crmods\\StatsCompletionTracker\n\n"
+        L"To stop this message, set VersionWarning=0 in statscompletiontracker_config.ini, or switch it off under Options > MODS.";
+    bool on = g_versionWarning.load() != 0, show = on && dialogs();
+    logf("message%s:", show ? "" : on ? " (not shown: dialogs are off)" : " (not shown: VersionWarning=0)");
+    for (size_t a = 0; a < msg.size(); ) {
+        size_t b = msg.find(L'\n', a);
+        if (b == std::wstring::npos) b = msg.size();
+        logf("  | %ls", msg.substr(a, b - a).c_str());
+        a = b + 1;
+    }
+    if (show) MessageBoxW(nullptr, msg.c_str(), (name + L" " + version).c_str(), MB_OK | MB_ICONWARNING | MB_TOPMOST | MB_SETFOREGROUND);
+}
+
+// The mod cannot run here: say so (unless told not to) and leave the process.
+DWORD standDown() {
+    logf("%s inactive: the game runs unmodified", kName);
+    logEnvironment();
+    showMessage();
+    return unloadSelf();
+}
+
 DWORD WINAPI initThread(LPVOID) {
     loadSettings(true);
 
@@ -488,13 +638,14 @@ DWORD WINAPI initThread(LPVOID) {
     }
     if (!g_enabled.load()) { logf("%s is switched off (Enabled=0): the game's menus stay as they are", kName); return unloadSelf(); }
 
-    // No pop-ups: on a game build where the code is not found the mod says so in its log and leaves.
-    if (!resolve()) { logf("%s inactive: the game runs unmodified", kName); return unloadSelf(); }
+    // On a game build where the code is not found the mod says so, in one message and in its log, and leaves.
+    if (!resolve()) return standDown();
     // The entry is taken a little after the start (see installResource). The UI asks for its files many
     // seconds after the game starts.
     Sleep(1200);
-    if (!installResource()) { logf("%s inactive: the game runs unmodified", kName); return unloadSelf(); }
+    if (!installResource()) return standDown();
     logf("active: %s %s", kName, kVersion);
+    logEnvironment();
 
     // Settings are re-read when either file changes; the next time the page is opened acts on them.
     FILETIME iniT, menuT; fileTime(iniPath(), iniT); fileTime(menuPath(), menuT);
