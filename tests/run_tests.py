@@ -221,7 +221,7 @@ check(abil and sorted(abil) == sorted(x.split(' (')[0] for x in by['abilities'][
 arts = rows['Artifacts']['d'].get('missing', [])
 notes = sorted(note for k, n, note in arts if note)
 check(len(arts) == len(by['artifacts']['missing']) and all(n == '???' and k == '' for k, n, note in arts) and notes == sorted(x.split(' (')[1][:-1] for x in by['artifacts']['missing'] if ' (' in x) and
-      'Side story: Every Dog Has Her Day' in notes and 'Source unconfirmed' in notes and by['artifacts']['total'] == 42 and all(note for k, n, note in arts) and '1.4.2' not in json.dumps(page),
+      'Side story: Every Dog Has Her Day' in notes and 'Central zone level 13' in notes and 'unconfirmed' not in json.dumps(page) and by['artifacts']['total'] == 42 and all(note for k, n, note in arts) and '1.4.2' not in json.dumps(page),
       'the %d missing Artifacts (of 42) read ??? and each says where it comes from, with no game version in it: %s' % (len(arts), '; '.join(notes)[:260]))
 # every thing of the Dylan tab has a note, and the notes hold back what the page holds back
 for key in ('artifacts', 'outfits', 'abilities'):

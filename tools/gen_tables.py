@@ -288,8 +288,9 @@ def aname(a):
 #   Trusted Spanner         counts. The dog side story did not hand it out up to game 1.4.1; game 1.4.2 (2026-10-08)
 #                           does, also to who finished the story before and has not started New Game Plus. Its
 #                           note is that story's, like any other reward of a story in parts.
-#   The Weekend Crossword   counts. Players report it as a zone level reward. In the 1.4.1 data its blueprint sits
-#                           on a reward set nothing names, so the note says no more than "source unconfirmed".
+#   The Weekend Crossword   counts. In the 1.4.1 data its blueprint sits on a reward set nothing names. Players
+#                           report it as the reward of Central's zone level 13 since a later game update, and
+#                           that is its note; the data at hand cannot confirm the level.
 #   Water Pistol            left out of the tables: a recipe, but no blueprint anywhere.
 COUNTED = {'ch_101_wrench', 'ch_105_stapler'}
 LEFT_OUT = {'ch_028_dumbbell'}
@@ -331,7 +332,7 @@ def quest_note(setname, seq=1):
     assert kind in STORY_ROWS and not again, (setname, kind, seq)
     return 'Side story: {s}', -1, kind
 def artifact_note(a, text):
-    if a == 'ch_105_stapler': return 'Source unconfirmed', -1, ''
+    if a == 'ch_105_stapler': return '{z} zone level 13', ZORDER.index('frontline'), ''
     ln, nz = level_note(text)
     if ln: return ln, nz, ''
     if 'sold by a vendor' in text: return 'Blueprint sold by a vendor', -1, ''

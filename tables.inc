@@ -1692,7 +1692,7 @@ const ItemDef kItems[] = {
     { 0x0341E740u, 0, 1, -1, 0, 0x211u, 0x1u, "Spray Paint", "CH_102_SODA_CAN", "Blueprint sold by a vendor", -1, -1, -1 },
     { 0x7EAF211Du, 0, 1, -1, 0, 0x212u, 0x1u, "Fork", "CH_103_FORK", "Side story: {s}", -1, -1, 5 },
     { 0x0D5526AEu, 0, 1, -1, 0, 0x213u, 0x1u, "Scrunchie", "CH_104_UMBRELLA", "Side story: {s}", -1, -1, 6 },
-    { 0x6F1AF4B8u, 0, 1, -1, 0, 0x214u, 0x1u, "The Weekend Crossword", "CH_105_STAPLER", "Source unconfirmed", -1, -1, -1 },
+    { 0x6F1AF4B8u, 0, 1, -1, 0, 0x214u, 0x1u, "The Weekend Crossword", "CH_105_STAPLER", "{z} zone level 13", 1, -1, -1 },
     { 0x381EDA43u, 0, 1, -1, 0, 0x215u, 0x1u, "Unfinished Lollipop", "CH_106_LOLLIPOP", "Every Sketch completed", -1, -1, -1 },
     { 0x9B79725Cu, 0, 1, -1, 0, 0x216u, 0x1u, "1996 Commemorative Coin", "", "{z} main mission", 6, -1, -1 },
     { 0x93FD161Au, 0, 1, -1, 0, 0x217u, 0x1u, "Old Subway Card", "", "{z} world encounter", 5, -1, -1 },

@@ -51,8 +51,8 @@ HOW IT COUNTS
     The Dylan tab shows how many of them you own.
   - Two Artifacts count as ones you can earn although game 1.4.1 gives no way to them:
     the one of the dog side story, which the game hands out since version 1.4.2, and
-    The Weekend Crossword, which players report as a zone level reward. One Artifact
-    that has a recipe but no blueprint anywhere is not counted at all.
+    The Weekend Crossword, a zone level reward that a later update hands out as well.
+    One Artifact that has a recipe but no blueprint anywhere is not counted at all.
   - The pages hold a few things back so they spoil nothing. Each has a setting:
       names of story things you have not done yet stay hidden until the main story is done
       (a side story in parts shows its name once you have found a part of it, and
