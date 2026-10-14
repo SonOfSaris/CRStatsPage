@@ -1,5 +1,5 @@
-StatsPage changelog
-===================
+Stats & Completion Tracker changelog
+====================================
 
 1.0   Release. Four more tabs in the Archives screen of the in-game menu, behind Collectibles, Enemies and
       Tutorials: Completion, Story, Zones and Dylan. One completion bar and a count for each kind of thing

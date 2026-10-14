@@ -1,5 +1,5 @@
-StatsPage 1.0 - completion stats in the Archives of CONTROL Resonant
-====================================================================
+Stats & Completion Tracker 1.0 for CONTROL Resonant
+===================================================
 
 Adds four tabs to the Archives screen of the in-game menu, behind Collectibles, Enemies and
 Tutorials. They show one completion bar and a count for each kind of thing the game lets you do
@@ -69,7 +69,8 @@ UNINSTALL
 
 SETTINGS
   crmods\StatsCompletionTracker\statscompletiontracker_config.ini
-  With Mod Settings Menu: Options > MODS > StatsPage; a choice made in the menu wins over the ini.
+  With Mod Settings Menu: Options > MODS > Stats & Completion Tracker; a choice made in the menu
+  wins over the ini.
   There you choose what the pages hold back (see above) and can switch the mod off.
   If the pages say they found no save (a copy of the game that does not use Steam), name your
   save folder under [Saves] Folder in the ini.

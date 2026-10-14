@@ -1,7 +1,7 @@
 {
  "schemaVersion": 1,
  "id": "statscompletiontracker",
- "name": "StatsPage",
+ "name": "Stats & Completion Tracker",
  "version": "1.0",
  "dll": "statscompletiontracker.dll",
  "options": [

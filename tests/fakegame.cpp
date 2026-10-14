@@ -167,7 +167,7 @@ int main(int argc, char** argv) {
         printf("%s\n", g_fail ? "FAILED" : "ALL PASSED");
         return g_fail ? 1 : 0;
     }
-    check(waitFor([&] { return has(readFile(logPath), "active: StatsPage"); }, 8000), "the DLL finds the handler entry and becomes active");
+    check(waitFor([&] { return has(readFile(logPath), "active: Stats & Completion Tracker 1.0"); }, 8000), "the DLL finds the handler entry and becomes active");
     check(has(readFile(logPath), modFirst ? "in front of another mod's" : "in front of the game's"), "the log says whose handler it stands in front of");
 
     FakeResponse s; uiRequest("coui://base/uiresources/game/ui/globals_island.bundle.js", s);

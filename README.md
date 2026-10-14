@@ -1,4 +1,4 @@
-# StatsPage
+# Stats & Completion Tracker
 
 Completion stats for **CONTROL Resonant**. The mod adds four tabs to the Archives screen of the
 in-game menu, behind Collectibles, Enemies and Tutorials: **Completion**, **Story**, **Zones** and

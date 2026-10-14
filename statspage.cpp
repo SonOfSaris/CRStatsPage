@@ -1,4 +1,4 @@
-// StatsPage 1.0 for CONTROL Resonant.
+// Stats & Completion Tracker 1.0 for CONTROL Resonant ("StatsPage" in the names of the source).
 //
 // How far the save is, row by row, with one completion bar: four more tabs in the Archives screen of the in-game
 // menu, behind Collectibles, Enemies and Tutorials (ui/statspage_archive.js; it adds its tabs and page while the
@@ -28,6 +28,7 @@
 namespace {
 
 const char kVersion[] = "1.0";
+const char kName[] = "Stats & Completion Tracker";       // the mod's name as a player reads it (log, MODS menu, README)
 
 #include "ui.inc"
 const size_t kRows = sizeof kRowKeys / sizeof kRowKeys[0];
@@ -404,18 +405,18 @@ DWORD WINAPI initThread(LPVOID) {
     wchar_t name[64]; swprintf_s(name, L"StatsPage_Instance_%lu", GetCurrentProcessId());
     g_instanceMutex = CreateMutexW(nullptr, TRUE, name);
     if (g_instanceMutex && GetLastError() == ERROR_ALREADY_EXISTS) {
-        logf("inactive: another copy of StatsPage is already in charge");
+        logf("inactive: another copy of %s is already in charge", kName);
         return unloadSelf();
     }
-    if (!g_enabled.load()) { logf("StatsPage is switched off (Enabled=0): the game's menus stay as they are"); return unloadSelf(); }
+    if (!g_enabled.load()) { logf("%s is switched off (Enabled=0): the game's menus stay as they are", kName); return unloadSelf(); }
 
     // No pop-ups: on a game build where the code is not found the mod says so in its log and leaves.
-    if (!resolve()) { logf("StatsPage inactive: the game runs unmodified"); return unloadSelf(); }
+    if (!resolve()) { logf("%s inactive: the game runs unmodified", kName); return unloadSelf(); }
     // The entry is taken a little after the start (see installResource). The UI asks for its files many
     // seconds after the game starts.
     Sleep(1200);
-    if (!installResource()) { logf("StatsPage inactive: the game runs unmodified"); return unloadSelf(); }
-    logf("active: StatsPage %s", kVersion);
+    if (!installResource()) { logf("%s inactive: the game runs unmodified", kName); return unloadSelf(); }
+    logf("active: %s %s", kName, kVersion);
 
     // Settings are re-read when either file changes; the next time the page is opened acts on them.
     FILETIME iniT, menuT; fileTime(iniPath(), iniT); fileTime(menuPath(), menuT);
@@ -445,7 +446,7 @@ BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID reserved) {
         InitializeCriticalSection(&g_engineLock);
         g_t0 = GetTickCount();
         g_log = _wfsopen((g_dir + L"statscompletiontracker.log").c_str(), L"w", _SH_DENYWR);   // readable while the game runs
-        logf("StatsPage %s loading from %ls", kVersion, g_dir.c_str());
+        logf("%s %s loading from %ls", kName, kVersion, g_dir.c_str());
         CreateThread(nullptr, 0, initThread, nullptr, 0, nullptr);
     } else if (reason == DLL_PROCESS_DETACH) {
         logf(reserved ? "game exiting" : "unloaded");
