@@ -7,6 +7,10 @@
 //   --mod-first    another mod has taken the vtable entry before the DLL loads (it appends a note to both files)
 //   --no-pattern   the handler is not in this exe: the DLL must log that and unload
 //   --trace        the ini next to the DLL has Trace=1: the answer must say so
+//   --inline-first another mod has hooked the handler itself before the DLL loads, the way hook libraries do
+//                  (a jump at the function's start): the DLL must find the function behind it, and both run
+//   --inline-next  the same on the handler's neighbour
+//   --next-slot    another mod has taken the vtable entry after the handler's
 // Writes <out>\script.js, <out>\template.html, <out>\page.json (what came out of the handler chain).
 #define _CRT_SECURE_NO_WARNINGS
 #include <windows.h>
@@ -89,8 +93,9 @@ extern "C" __declspec(noinline) void fakeResourceBody(void*, void* request, void
     } else ((void (*)(void*, uint32_t))vt(response)[8])(response, 1);      // not a file of the game's
 }
 extern "C" __declspec(noinline) void fakeResourceDtor() {}
+extern "C" __declspec(noinline) void fakeResourceLast() {}
 // The handler's vtable, in the exe's read-only data like the game's: destructor, handler, two more.
-extern "C" const void* g_resourceVtable[4] = { (const void*)&fakeResourceDtor, g_resourceFn, g_resourceNextFn, g_resourceNextFn };
+extern "C" const void* g_resourceVtable[4] = { (const void*)&fakeResourceDtor, g_resourceFn, g_resourceNextFn, (const void*)&fakeResourceLast };
 struct HandlerObject { const void** vtable; };
 static HandlerObject g_handler = { g_resourceVtable };
 typedef void (*ResourceFn)(void*, void*, void*);
@@ -120,6 +125,56 @@ static void installOther() {
     VirtualProtect((void*)slot, 8, old, &old);
 }
 
+// Another mod that hooks a function the way hook libraries do: a jump at the function's start to a relay near
+// the image, which jumps on to the mod's function; the instruction the jump replaced lives on in a trampoline
+// that jumps back behind it.
+static int g_inlineCalls = 0;
+static ResourceFn g_inlineOrig;
+static void inlineHook(void* self, void* request, void* response) { g_inlineCalls++; g_inlineOrig(self, request, response); }
+static uint8_t* allocNear(const void* at) {
+    SYSTEM_INFO si; GetSystemInfo(&si);
+    uintptr_t step = si.dwAllocationGranularity, base = (uintptr_t)at & ~(step - 1);
+    for (uintptr_t d = step; d < 0x70000000; d += step)
+        for (int s = 0; s < 2; s++) {
+            void* p = VirtualAlloc((void*)(s ? base + d : base - d), 4096, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+            if (p) return (uint8_t*)p;
+        }
+    return nullptr;
+}
+// the byte in memory now (the compiler takes what it knows of a read-only section for a constant)
+static unsigned char byteAt(const void* p) { return *(const volatile unsigned char*)p; }
+// the log's line that holds this text
+static std::string lineWith(const std::string& log, const char* text) {
+    size_t at = log.find(text);
+    if (at == std::string::npos) return "";
+    size_t a = log.rfind('\n', at), b = log.find('\n', at);
+    return log.substr(a == std::string::npos ? 0 : a + 1, b == std::string::npos ? std::string::npos : b - (a == std::string::npos ? 0 : a + 1));
+}
+static void absJump(uint8_t* at, const void* to) { at[0] = 0xFF; at[1] = 0x25; memset(at + 2, 0, 4); memcpy(at + 6, &to, 8); }
+// puts the hook on fn, whose first instruction is 5 bytes long and can run anywhere; returns the trampoline
+static void* inlineHookOn(unsigned char* fn, const void* hook) {
+    uint8_t* mem = allocNear(fn);
+    if (!mem) return nullptr;
+    uint8_t* relay = mem; uint8_t* tramp = mem + 32;
+    absJump(relay, hook);
+    memcpy(tramp, fn, 5); absJump(tramp + 5, fn + 5);
+    DWORD old; VirtualProtect(fn, 5, PAGE_EXECUTE_READWRITE, &old);
+    int32_t rel = (int32_t)(relay - (fn + 5));
+    fn[0] = 0xE9; memcpy(fn + 1, &rel, 4);
+    VirtualProtect(fn, 5, old, &old);
+    FlushInstructionCache(GetCurrentProcess(), fn, 5);
+    return tramp;
+}
+// Another mod's function in the vtable entry after the handler's (never called here)
+static void takeNextSlot() {
+    uint8_t* stub = (uint8_t*)VirtualAlloc(nullptr, 16, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+    stub[0] = 0xC3;
+    void* volatile* slot = (void* volatile*)&g_resourceVtable[2];
+    DWORD old; VirtualProtect((void*)slot, 8, PAGE_READWRITE, &old);
+    *slot = stub;
+    VirtualProtect((void*)slot, 8, old, &old);
+}
+
 template <class F> static bool waitFor(F cond, DWORD ms) {
     DWORD t0 = GetTickCount();
     while (GetTickCount() - t0 < ms) { if (cond()) return true; Sleep(50); }
@@ -141,14 +196,20 @@ static bool has(const std::string& s, const char* part) { return s.find(part) !=
 int main(int argc, char** argv) {
     if (argc < 5) { printf("usage: fakegame <dll folder> <script> <template> <out folder> [--mod-first] [--no-pattern]\n"); return 2; }
     std::string dir = argv[1], out = argv[4];
-    bool modFirst = false, noPattern = false, trace = false;
-    for (int i = 5; i < argc; i++) { if (!strcmp(argv[i], "--mod-first")) modFirst = true; if (!strcmp(argv[i], "--no-pattern")) noPattern = true; if (!strcmp(argv[i], "--trace")) trace = true; }
+    bool modFirst = false, noPattern = false, trace = false, inlineFirst = false, inlineNext = false, nextSlot = false;
+    for (int i = 5; i < argc; i++) {
+        if (!strcmp(argv[i], "--mod-first")) modFirst = true; if (!strcmp(argv[i], "--no-pattern")) noPattern = true; if (!strcmp(argv[i], "--trace")) trace = true;
+        if (!strcmp(argv[i], "--inline-first")) inlineFirst = true; if (!strcmp(argv[i], "--inline-next")) inlineNext = true; if (!strcmp(argv[i], "--next-slot")) nextSlot = true;
+    }
     g_script = readFile(argv[2]); g_template = readFile(argv[3]);
     check(g_script.size() > 100000 && g_template.size() > 100000, "rig: the game's two files are at hand");
     setvbuf(stdout, nullptr, _IONBF, 0);
     link(g_resourceFn, 61, &fakeResourceBody);
     if (noPattern) { DWORD old; VirtualProtect(g_resourceNextFn, 8, PAGE_EXECUTE_READWRITE, &old); g_resourceNextFn[1] = 0x8B; VirtualProtect(g_resourceNextFn, 8, old, &old); }   // the neighbour is never run
     if (modFirst) installOther();
+    if (inlineFirst) { g_inlineOrig = (ResourceFn)inlineHookOn(g_resourceFn, (const void*)&inlineHook); check(g_inlineOrig != nullptr && byteAt(g_resourceFn) == 0xE9, "rig: another mod's hook is on the handler itself"); }
+    if (inlineNext) check(inlineHookOn(g_resourceNextFn, (const void*)&fakeResourceDtor) != nullptr && byteAt(g_resourceNextFn) == 0xE9, "rig: another mod's hook is on the handler's neighbour");
+    if (nextSlot) { takeNextSlot(); check(g_resourceVtable[2] != (const void*)g_resourceNextFn, "rig: another mod's function is in the vtable entry after the handler's"); }
     { FakeResponse r; uiRequest("coui://base/uiresources/game/ui/globals_island.bundle.js", r);
       check(r.done && !r.failed && r.data.size() >= g_script.size() && g_extraReturn == 77, "rig: the UI file handler serves the script"); }
 
@@ -169,6 +230,12 @@ int main(int argc, char** argv) {
     }
     check(waitFor([&] { return has(readFile(logPath), "active: Stats & Completion Tracker 1.0"); }, 8000), "the DLL finds the handler entry and becomes active");
     check(has(readFile(logPath), modFirst ? "in front of another mod's" : "in front of the game's"), "the log says whose handler it stands in front of");
+    if (inlineFirst) check(has(lineWith(readFile(logPath), "UI file handler at rva"), "behind a hook of fakegame.exe: that mod got to the function first, both run"),
+                           "the handler was found behind the other mod's hook, and the log names that mod");
+    else check(!has(lineWith(readFile(logPath), "UI file handler at rva"), "behind a hook"), "no hook is reported on a handler that has none");
+    if (inlineNext) check(has(lineWith(readFile(logPath), "UI file handler's neighbour at rva"), "behind a hook of fakegame.exe") && !has(readFile(logPath), "found 0 times"),
+                          "the neighbour was found behind the other mod's hook as well");
+    if (nextSlot) check(has(readFile(logPath), "the entry after the handler's holds another mod's function"), "the handler's entry was found although the entry after it is another mod's");
 
     FakeResponse s; uiRequest("coui://base/uiresources/game/ui/globals_island.bundle.js", s);
     check(s.done && !s.failed && s.code == 200 && s.data.size() > g_script.size() && s.data.compare(0, g_script.size(), g_script) == 0 && (modFirst || s.sum == 15) && g_extraReturn == 77,
@@ -201,6 +268,7 @@ int main(int argc, char** argv) {
     FakeResponse s2; uiRequest("coui://base/uiresources/game/ui/globals_island.bundle.js", s2);
     FakeResponse t2; uiRequest("coui://base/uiresources/game/UI/OptionsComponent.template.html", t2);
     check(s2.data == s.data && t2.data == t.data, "asked for again, both files come out the same");
+    if (inlineFirst) check(g_inlineCalls >= 6, "the other mod's hook on the handler ran for every request: both mods work");
     CreateDirectoryA(out.c_str(), nullptr);
     writeFile(out + "\\script.js", s.data); writeFile(out + "\\template.html", t.data); writeFile(out + "\\page.json", j.data);
     printf("%s\n", g_fail ? "FAILED" : "ALL PASSED");

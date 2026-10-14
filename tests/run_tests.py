@@ -47,6 +47,11 @@ d = run_host('alone', saves)
 d2 = run_host('behind', saves, '--mod-first')
 run_host('nopattern', saves, '--no-pattern')
 run_host('traced', saves, '--trace')
+# other mods that got to the game's functions first: a hook library's jump on the handler and on its neighbour,
+# the same behind a mod that also took the vtable entry, and a mod's function in the entry after the handler's
+d_inline = run_host('inline', saves, '--inline-first', '--inline-next')
+d_inline2 = run_host('inline_behind', saves, '--inline-first', '--mod-first')
+d_nextslot = run_host('nextslot', saves, '--next-slot')
 # the unlock hints switched off, in the ini and through the MODS menu's file: every hint reads ???
 def hint_notes(d):
     rr = {x['k']: x for x in json.loads(open(d + 'files/page.json', 'rb').read().decode('utf-8'))['rows']}
@@ -62,6 +67,8 @@ check(r.returncode == 0, 'gen_ui.py --apply: ' + r.stdout.strip())
 rb = lambda p: open(p, 'rb').read()
 check(rb(d + 'files/script.js') == rb(ref + '/globals_island.bundle.js'), 'the DLL\'s script equals the reference, byte for byte')
 check(rb(d + 'files/template.html') == rb(TEMPLATE), 'the Options page goes out as the game has it, byte for byte')
+check(rb(d_inline + 'files/script.js') == rb(d + 'files/script.js') and rb(d_nextslot + 'files/script.js') == rb(d + 'files/script.js') and rb(d_inline2 + 'files/script.js') == rb(d2 + 'files/script.js') and
+      rb(d_inline + 'files/page.json') == rb(d + 'files/page.json'), 'with another mod\'s hook on the game\'s functions the script and the numbers come out the same')
 # behind another mod: the Archives script behind that mod's note
 s2 = rb(d2 + 'files/script.js'); t2 = rb(d2 + 'files/template.html')
 archive = json.load(open(src + 'tools/ui.json', encoding='utf-8'))['archive'].encode('utf-8')

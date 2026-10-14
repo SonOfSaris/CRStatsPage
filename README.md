@@ -29,7 +29,8 @@ details, and how the bar counts, are in [README-StatsCompletionTracker.txt](READ
 Made for game version 1.4.1. The mod shows no messages: if a later update moves the code it
 needs, it leaves the game's menus as they are and says so in
 `crmods\StatsCompletionTracker\statscompletiontracker.log`.
-It works next to other mods that change the same menu files, Mod Settings Menu among them.
+It works next to other mods that change the same menu files, Mod Settings Menu among them, and
+next to mods that hook the same game functions.
 
 ## Build
 
@@ -69,6 +70,11 @@ there. It appends `ui\statspage_archive.js` to the game's globals script on its 
 and it answers one address of its own, `coui://base/__statspage__.json`, with the numbers. The
 mod finds the vtable entry by byte pattern at start. No game code is hooked or patched, and no
 file on disk is changed.
+
+Other mods may have got to the same functions first. If one has put a hook on the handler or on
+the function after it in the vtable (a jump at the function's start), the mod finds the function
+by the rest of its pattern, names the other mod in its log, and both run. If one has taken the
+vtable entry after the handler's, the mod finds its entry by the handler alone.
 
 The script adds the four tab buttons and the page to the Archives screen while the game runs. It
 needs no particular piece of the game's script text, so it does not get in the way of other mods

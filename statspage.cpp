@@ -322,7 +322,80 @@ bool findText() {
     return g_text != nullptr;
 }
 
-// Finds a piece of the game's code. Fails closed: the pattern must match exactly once.
+bool inText(const void* p) { return (const uint8_t*)p >= g_text && (const uint8_t*)p < g_text + g_textSize; }
+bool inExe(const void* p) { return (const uint8_t*)p >= g_exe && (const uint8_t*)p < g_exe + g_exeSize; }
+
+// ---------------------------------------------------------------- next to other mods
+// Is this memory there to be read (n bytes), and is it code?
+bool readable(const void* p, size_t n, bool code = false) {
+    MEMORY_BASIC_INFORMATION mbi;
+    if (!p || VirtualQuery(p, &mbi, sizeof mbi) != sizeof mbi) return false;
+    if (mbi.State != MEM_COMMIT || (mbi.Protect & PAGE_GUARD) || (mbi.Protect & PAGE_NOACCESS)) return false;
+    if (code && !(mbi.Protect & (PAGE_EXECUTE | PAGE_EXECUTE_READ | PAGE_EXECUTE_READWRITE | PAGE_EXECUTE_WRITECOPY))) return false;
+    return (uintptr_t)p + n <= (uintptr_t)mbi.BaseAddress + mbi.RegionSize;
+}
+
+// Length of a jump written over a function start, in the forms hook libraries use (0 = none of them), and
+// where it goes.
+size_t jumpAt(const uint8_t* p, uintptr_t& target) {
+    if (p[0] == 0xE9) { int32_t rel; memcpy(&rel, p + 1, 4); target = (uintptr_t)p + 5 + rel; return 5; }             // jmp rel32
+    if (p[0] == 0xFF && p[1] == 0x25 && !p[2] && !p[3] && !p[4] && !p[5]) { memcpy(&target, p + 6, 8); return 14; }   // jmp [rip+0], address
+    if (p[0] == 0x48 && p[1] == 0xB8 && p[10] == 0xFF && p[11] == 0xE0) { memcpy(&target, p + 2, 8); return 12; }     // mov rax, address; jmp rax
+    if (p[0] == 0x49 && p[1] == 0xBB && p[10] == 0x41 && p[11] == 0xFF && p[12] == 0xE3) { memcpy(&target, p + 2, 8); return 13; }   // mov r11, address; jmp r11
+    return 0;
+}
+
+// File name of the module a hook's jump leads to. A hook library's jump goes to a relay outside any module
+// first, which jumps on to the hook function.
+std::string hookOwner(uintptr_t target) {
+    for (int hop = 0; hop < 3; hop++) {
+        HMODULE mod = nullptr;
+        if (GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, (LPCWSTR)target, &mod) && mod) {
+            wchar_t path[MAX_PATH] = L""; GetModuleFileNameW(mod, path, MAX_PATH);
+            const wchar_t* name = wcsrchr(path, L'\\'); name = name ? name + 1 : path;
+            char out[MAX_PATH * 3] = ""; WideCharToMultiByte(CP_UTF8, 0, name, -1, out, sizeof out, nullptr, nullptr);
+            if (out[0]) return out;
+            break;
+        }
+        uintptr_t next = 0;
+        if (!readable((const void*)target, 16) || !jumpAt((const uint8_t*)target, next)) break;
+        target = next;
+    }
+    return "another mod";
+}
+
+// Another mod may have put a hook on a function before this mod looked for it. The function then starts with
+// a jump out of the game image, and its pattern does not match there any more. Such a function is found by the
+// rest of its pattern, from kHookHead on. This mod needs only the function's address (to know its entry in the
+// vtable) and hooks nothing itself: its own function goes into the vtable entry as ever, and the call it
+// passes on runs through the other mod's hook. Both run.
+const size_t kHookHead = 16;      // bytes at a function start that another mod's jump may have replaced
+uint8_t* findBehindHook(const std::string& b, const std::string& m, const char* what) {
+    size_t n = b.size();
+    if (n < kHookHead + 8) return nullptr;
+    int count = 0; const uint8_t* site = nullptr; uintptr_t target = 0;
+    for (size_t i = 0; i + n <= g_textSize; i++) {
+        size_t k = kHookHead;
+        for (; k < n; k++) if (m[k] == 'x' && g_text[i + k] != (uint8_t)b[k]) break;
+        if (k < n) continue;
+        const uint8_t* p = g_text + i; uintptr_t t = 0;
+        size_t len = jumpAt(p, t);
+        bool hooked = len && !inExe((const void*)t);
+        // what the jump left of the function start is still the pattern, or the filler some hook libraries write
+        for (size_t j = len; hooked && j < kHookHead; j++)
+            if (m[j] == 'x' && p[j] != (uint8_t)b[j] && p[j] != 0x90 && p[j] != 0xCC) hooked = false;
+        if (!hooked) continue;
+        if (!count) { site = p; target = t; }
+        count++;
+    }
+    if (count != 1) return nullptr;
+    logf("%s at rva 0x%llx, behind a hook of %s: that mod got to the function first, both run", what,
+         (unsigned long long)(g_textRva + (size_t)(site - g_text)), hookOwner(target).c_str());
+    return (uint8_t*)site;
+}
+
+// Finds a piece of the game's code. Fails closed: the pattern must match exactly once, as the game ships it or
+// behind another mod's hook.
 uint8_t* findOnce(const char* pattern, const char* what) {
     std::string b, m; parsePattern(pattern, b, m);
     int count = 0; size_t first = 0, n = b.size();
@@ -332,33 +405,38 @@ uint8_t* findOnce(const char* pattern, const char* what) {
         for (; k < n; k++) if (m[k] == 'x' && g_text[i + k] != (uint8_t)b[k]) break;
         if (k == n) { if (!count) first = i; count++; }
     }
-    if (count != 1) { logf("%s was found %d times (game build changed?)", what, count); return nullptr; }
+    if (count == 0) { if (uint8_t* p = findBehindHook(b, m, what)) return p; }
+    if (count != 1) { logf("%s was found %d times (game build changed, or another mod rewrote it?)", what, count); return nullptr; }
     logf("%s at rva 0x%llx", what, (unsigned long long)(g_textRva + first));
     return (uint8_t*)g_text + first;
 }
 
-bool inText(const void* p) { return (const uint8_t*)p >= g_text && (const uint8_t*)p < g_text + g_textSize; }
-bool inExe(const void* p) { return (const uint8_t*)p >= g_exe && (const uint8_t*)p < g_exe + g_exeSize; }
-
 // The vtable entry of the UI's resource handler: the pointer in the exe's data that is followed by a
 // pointer to the next function of that vtable and preceded by one into the code. What it holds now is the
 // game's handler or, when another mod was first, a function outside the exe.
+// If no such entry is there, another mod may have taken the entry after it: then the entry is the one that holds
+// the game's handler itself, between a pointer into the code and that mod's function (code outside the exe).
 void** findResourceSlot(const uint8_t* handler, const uint8_t* next) {
     auto* nt = (IMAGE_NT_HEADERS*)(g_exe + ((IMAGE_DOS_HEADER*)g_exe)->e_lfanew);
     auto* sec = IMAGE_FIRST_SECTION(nt);
-    void** found = nullptr; int count = 0;
-    for (unsigned i = 0; i < nt->FileHeader.NumberOfSections; i++) {
-        if ((sec[i].Characteristics & IMAGE_SCN_MEM_EXECUTE) || !(sec[i].Characteristics & IMAGE_SCN_MEM_READ)) continue;
-        if (!(sec[i].Characteristics & IMAGE_SCN_CNT_INITIALIZED_DATA)) continue;
-        void** p = (void**)(g_exe + sec[i].VirtualAddress);
-        size_t n = (sec[i].Misc.VirtualSize < sec[i].SizeOfRawData ? sec[i].Misc.VirtualSize : sec[i].SizeOfRawData) / sizeof(void*);
-        for (size_t k = 1; k + 1 < n; k++) {
-            if (p[k + 1] != next || !inText(p[k - 1])) continue;
-            if (p[k] != handler && inExe(p[k])) continue;
-            found = p + k; count++;
+    void** found = nullptr; int count = 0, pass = 0;
+    for (; pass < 2 && !count; pass++)
+        for (unsigned i = 0; i < nt->FileHeader.NumberOfSections; i++) {
+            if ((sec[i].Characteristics & IMAGE_SCN_MEM_EXECUTE) || !(sec[i].Characteristics & IMAGE_SCN_MEM_READ)) continue;
+            if (!(sec[i].Characteristics & IMAGE_SCN_CNT_INITIALIZED_DATA)) continue;
+            void** p = (void**)(g_exe + sec[i].VirtualAddress);
+            size_t n = (sec[i].Misc.VirtualSize < sec[i].SizeOfRawData ? sec[i].Misc.VirtualSize : sec[i].SizeOfRawData) / sizeof(void*);
+            for (size_t k = 1; k + 1 < n; k++) {
+                if (!inText(p[k - 1])) continue;
+                if (pass == 0) {
+                    if (p[k + 1] != next) continue;
+                    if (p[k] != handler && inExe(p[k])) continue;
+                } else if (p[k] != handler || inExe(p[k + 1]) || !readable(p[k + 1], 1, true)) continue;
+                found = p + k; count++;
+            }
         }
-    }
     if (count != 1) { logf("the UI's resource handler entry was found %d times", count); return nullptr; }
+    if (pass == 2) logf("the entry after the handler's holds another mod's function: the handler's entry is known by the handler itself");
     return found;
 }
 

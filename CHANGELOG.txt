@@ -8,4 +8,5 @@ Stats & Completion Tracker changelog
       for each side story that comes in parts. The pages hold back what would spoil the story (names of
       story things not done yet, story totals, zones not visited, names of locked items); each of these is
       a setting in statscompletiontracker_config.ini or under Options > MODS (Mod Settings Menu). The mod
-      changes no game code and no save. Made for game version 1.4.1.
+      changes no game code and no save, and it works next to other mods that use the same menu files or
+      hook the same game functions. Made for game version 1.4.1.
