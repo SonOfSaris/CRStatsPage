@@ -14,7 +14,7 @@ find, taken from your latest save.
   still missing and where it comes from.
 - The pages hold back what would spoil the story: names of story things you have not done yet,
   story totals, zones you have not visited, names of items you have not unlocked. Each of these is
-  a setting.
+  a setting, and so are the hints on where a missing thing comes from.
 - The numbers are read again each time you open the Archives. The mod changes no game code and no
   save.
 - With Mod Settings Menu installed, the settings are under Options > MODS, with an Enable switch.

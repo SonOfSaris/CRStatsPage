@@ -183,6 +183,7 @@ struct View {
     bool hideStoryTotals = true;             // main story and side stories read "25 / ??" until all of them are done
     int zones = 1;                           // a zone the save does not know yet: 0 named, 1 shown as ???, 2 left out
     bool hideLockedNames = true;             // Artifacts and clothes not owned read ??? (their source stays); an ability does until its selection is open
+    bool hints = true;                       // a missing thing says where it comes from; off: that note reads ???
 };
 
 // An item's note. "{z}" stands for the name of the zone it speaks of, or ??? while that zone is held back. "{s}"
@@ -349,10 +350,11 @@ inline std::string pageJson(const Units& u, const Info& info, const char* const*
                         const ItemDef& it = kItems[i];
                         if (it.kind || u[i] >= it.units) continue;
                         bool anon = hide == 1 || (hide == 2 && !(it.rv >= 0 && (info.reveals >> it.rv & 1)));
-                        bool says = !anon || (it.note && it.note[0]);
+                        bool says = !anon || (view.hints && it.note && it.note[0]);
                         if (hide && (pass == 0) != says) continue;
                         if (!first) j += ","; first = false;
-                        j += "["; jstr(j, anon ? "" : it.key); j += ","; jstr(j, anon ? "???" : it.name); j += ","; jstr(j, noteOf(it, info.zones, view.zones, it.ns >= 0 && (names == 1 || (names == 0 && storyDone) || haveOf(u, kCats[it.ns]) > 0))); j += "]";
+                        j += "["; jstr(j, anon ? "" : it.key); j += ","; jstr(j, anon ? "???" : it.name); j += ","; jstr(j, !view.hints && it.note && it.note[0] ? std::string("???") :
+                                    noteOf(it, info.zones, view.zones, it.ns >= 0 && (names == 1 || (names == 0 && storyDone) || haveOf(u, kCats[it.ns]) > 0))); j += "]";
                     }
                 j += "],\"limit\":25";
                 any = true;

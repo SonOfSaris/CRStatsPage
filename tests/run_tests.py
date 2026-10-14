@@ -24,14 +24,17 @@ def check(ok, what):
     print('%s  %s' % ('PASS' if ok else 'FAIL', what))
     if not ok: fails.append(what)
 def win(p): return os.path.normpath(p)
-def stage(name, saves, more=''):
+def stage(name, saves, more='', page='', menu=''):
     d = work + name + '/'
     shutil.rmtree(d, ignore_errors=True); os.makedirs(d)
     shutil.copy(src + 'out/statscompletiontracker.dll', d)
-    with open(d + 'statscompletiontracker_config.ini', 'w') as f: f.write('[General]\nEnabled=1\n[Page]\nMissingNames=0\n[Saves]\nFolder=%s\n' % win(saves) + more)
+    with open(d + 'statscompletiontracker_config.ini', 'w') as f: f.write('[General]\nEnabled=1\n[Page]\nMissingNames=0\n%s[Saves]\nFolder=%s\n' % (page, win(saves)) + more)
+    if menu:        # what Mod Settings Menu saves of the player's choices
+        os.makedirs(d + 'ModMenuConfig')
+        with open(d + 'ModMenuConfig/statscompletiontracker.ini', 'w') as f: f.write('[Settings]\n' + menu)
     return d
-def run_host(name, saves, *flags):
-    d = stage(name, saves, '[Archives]\nTrace=1\n' if '--trace' in flags else '')
+def run_host(name, saves, *flags, page='', menu=''):
+    d = stage(name, saves, '[Archives]\nTrace=1\n' if '--trace' in flags else '', page, menu)
     r = subprocess.run([here + 'out/fakegame.exe', win(d), win(SCRIPT), win(TEMPLATE), win(d + 'files')] + list(flags), capture_output=True, text=True, timeout=120)
     print('--- fakegame %s %s' % (name, ' '.join(flags)))
     for l in r.stdout.splitlines():
@@ -44,6 +47,13 @@ d = run_host('alone', saves)
 d2 = run_host('behind', saves, '--mod-first')
 run_host('nopattern', saves, '--no-pattern')
 run_host('traced', saves, '--trace')
+# the unlock hints switched off, in the ini and through the MODS menu's file: every hint reads ???
+def hint_notes(d):
+    rr = {x['k']: x for x in json.loads(open(d + 'files/page.json', 'rb').read().decode('utf-8'))['rows']}
+    return [note for key in ('artifacts', 'outfits', 'abilities') for k, n, note in rr[key]['d'].get('missing', [])]
+hn = hint_notes(d); h1 = hint_notes(run_host('nohints', saves, page='UnlockHints=0\n')); h2 = hint_notes(run_host('nohints_menu', saves, menu='unlock_hints=false\n'))
+check(len(hn) > 10 and all(hn) and '???' not in hn and len(h1) == len(hn) and set(h1) == {'???'}, 'UnlockHints=0 in the ini: each of the %d hints on where a missing thing comes from reads ???' % len(h1))
+check(len(h2) == len(hn) and set(h2) == {'???'}, 'the same with the switch off in the MODS menu\'s file')
 
 # what tools/gen_ui.py makes of the same script
 ref = work + 'ref'
@@ -194,6 +204,10 @@ def held_back(folder, label):
     check(sorted(got_ab) == want_ab and '???' in want_ab and any(n != '???' for n in want_ab) and
           sorted(note for k, n, note in rows['abilities']['d']['missing']) == held(by['abilities']['missing']) and all(note for k, n, note in rows['abilities']['d']['missing']),
           '%s: a missing ability is named once its selection is open, the others read ???; each says where it comes from: %s' % (label, ', '.join('%s (%s)' % (n, note) for k, n, note in rows['abilities']['d']['missing'])))
+    ph, rh = folder_page(folder, 0, 1, 1, 1, 0)                        # the unlock hints off
+    check(all([note for k, n, note in rh[key]['d']['missing']] == ['???'] * len(rows[key]['d']['missing']) and [n for k, n, note in rh[key]['d']['missing']].count('???') == [n for k, n, note in rows[key]['d']['missing']].count('???')
+              for key in ('artifacts', 'outfits', 'abilities')) and all(rh[k]['v'] == rows[k]['v'] for k in rows) and 'hidden' in rh['side']['d'],
+          '%s: with the unlock hints off every hint reads ???; names, counts and the rest of the page are as before' % label)
     p, rows = folder_page(folder, 0, 0, 0, 0)                          # the three settings off
     check(all(rows[k]['v'] == '%d / %d' % (by[k]['have'], by[k]['total']) for k in ('main', 'side')) and [g[1] for g in rows['levels']['d']['groups']] == zn and
           sorted(n for k, n, note in rows['artifacts']['d']['missing']) == sorted(x.split(' (')[0] for x in by['artifacts']['missing']) and '???' not in json.dumps([r for r in p['rows'] if r['k'] not in unfound + und]) and all(rows[k]['l'] == '???' for k in unfound) and

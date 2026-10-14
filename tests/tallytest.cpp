@@ -1,6 +1,6 @@
 // tallytest - the mod's save reading and counting, outside the game.
 //   tallytest file <...-persi-global> ...     per file: {"file":..., "pct":..., "cats":[have per category], ...}
-//   tallytest folder <dir> [names 0|1|2] [hide story totals 0|1] [zones not visited 0|1|2] [hide locked names 0|1]
+//   tallytest folder <dir> [names 0|1|2] [hide story totals 0|1] [zones not visited 0|1|2] [hide locked names 0|1] [unlock hints 0|1]
 //                                             the page's JSON for a folder of save files, as the mod would show it
 //   tallytest synthetic <missing> <reach> <promo>   the page's JSON for a made-up state (see below)
 //   tallytest steam <steam_api64.dll> [times]
@@ -52,6 +52,7 @@ int main(int argc, char** argv) {
         if (argc >= 5) view.hideStoryTotals = atoi(argv[4]) != 0;
         if (argc >= 6) view.zones = atoi(argv[5]);
         if (argc >= 7) view.hideLockedNames = atoi(argv[6]) != 0;
+        if (argc >= 8) view.hints = atoi(argv[7]) != 0;
         std::string j = e.page(kRowKeys, sizeof kRowKeys / sizeof kRowKeys[0], view, "test");
         printf("%s\n", j.c_str());
         return 0;

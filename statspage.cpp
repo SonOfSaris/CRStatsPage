@@ -53,6 +53,7 @@ std::atomic<int> g_names{0};                 // names of missing story things: 0
 std::atomic<int> g_storyTotals{1};           // [Page] HideStoryTotals: the story rows read "25 / ??" until all is done
 std::atomic<int> g_zones{1};                 // [Page] UnvisitedZones: 0 named, 1 shown as ???, 2 left out
 std::atomic<int> g_lockedNames{1};           // [Page] HideLockedNames: ??? for Artifacts, clothes and abilities not unlocked
+std::atomic<int> g_hints{1};                 // [Page] UnlockHints: a missing thing says where it comes from (0: that reads ???)
 std::wstring g_saveFolder;                   // [Saves] Folder, empty = the store's storage
 std::atomic<int> g_hold{1};                  // [Archives] HoldGameList: the game's list is switched off under our page
 std::atomic<int> g_trace{0};                 // [Archives] Trace: the Archives script tells the log what it does
@@ -100,6 +101,7 @@ void loadSettings(bool first) {
     int enabled = iniInt(L"General", L"Enabled", 1, f) != 0;
     int names = iniInt(L"Page", L"MissingNames", 0, f);
     int totals = iniInt(L"Page", L"HideStoryTotals", 1, f) != 0, zones = iniInt(L"Page", L"UnvisitedZones", 1, f), lockedNames = iniInt(L"Page", L"HideLockedNames", 1, f) != 0;
+    int hints = iniInt(L"Page", L"UnlockHints", 1, f) != 0;
     int hold = iniInt(L"Archives", L"HoldGameList", 1, f) != 0, trace = iniInt(L"Archives", L"Trace", 0, f) != 0;
     int fromMenu = 0; double v;
     if (menuNum(L"enabled", v, m)) { enabled = v != 0; fromMenu++; }
@@ -107,6 +109,7 @@ void loadSettings(bool first) {
     if (menuNum(L"hide_story_totals", v, m)) { totals = v != 0; fromMenu++; }
     if (menuNum(L"unvisited_zones", v, m)) { zones = (int)v; fromMenu++; }
     if (menuNum(L"hide_locked_names", v, m)) { lockedNames = v != 0; fromMenu++; }
+    if (menuNum(L"unlock_hints", v, m)) { hints = v != 0; fromMenu++; }
     if (names < 0 || names > 2) names = 0;
     if (zones < 0 || zones > 2) zones = 1;
     if (first) {
@@ -116,12 +119,12 @@ void loadSettings(bool first) {
         g_enabled = enabled;
     }
     bool changed = first || names != g_names.load() || hold != g_hold.load() || trace != g_trace.load() ||
-                   totals != g_storyTotals.load() || zones != g_zones.load() || lockedNames != g_lockedNames.load();
+                   totals != g_storyTotals.load() || zones != g_zones.load() || lockedNames != g_lockedNames.load() || hints != g_hints.load();
     if (changed)
-        logf("settings: Enabled=%d MissingNames=%d HideStoryTotals=%d UnvisitedZones=%d HideLockedNames=%d HoldGameList=%d Trace=%d (%d from the MODS menu)%s", g_enabled.load(),
-             names, totals, zones, lockedNames, hold, trace, fromMenu,
+        logf("settings: Enabled=%d MissingNames=%d HideStoryTotals=%d UnvisitedZones=%d HideLockedNames=%d UnlockHints=%d HoldGameList=%d Trace=%d (%d from the MODS menu)%s", g_enabled.load(),
+             names, totals, zones, lockedNames, hints, hold, trace, fromMenu,
              !first && enabled != g_enabled.load() ? "; Enabled changes with the next start of the game" : "");
-    g_names = names; g_storyTotals = totals; g_zones = zones; g_lockedNames = lockedNames; g_hold = hold; g_trace = trace;
+    g_names = names; g_storyTotals = totals; g_zones = zones; g_lockedNames = lockedNames; g_hints = hints; g_hold = hold; g_trace = trace;
 }
 
 void fileTime(const std::wstring& f, FILETIME& t) {
@@ -143,7 +146,7 @@ std::string pageJson() {
         g_engine = new engine::Engine(g_storage, logf);
     }
     tally::View view;
-    view.names = g_names.load(); view.hideStoryTotals = g_storyTotals.load() != 0; view.zones = g_zones.load(); view.hideLockedNames = g_lockedNames.load() != 0;
+    view.names = g_names.load(); view.hideStoryTotals = g_storyTotals.load() != 0; view.zones = g_zones.load(); view.hideLockedNames = g_lockedNames.load() != 0; view.hints = g_hints.load() != 0;
     std::string j = g_engine->page(kRowKeys, kRows, view, kVersion);
     LeaveCriticalSection(&g_engineLock);
     // what the Archives script may do (it reads this with every answer)

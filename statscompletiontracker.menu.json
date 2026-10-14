@@ -49,6 +49,13 @@
    "default": true,
    "label": "Hide names of locked items",
    "description": "On: Artifacts and clothes you have not unlocked show as ??? in the lists of missing ones, next to where they come from. A missing ability shows as ??? until its Resonant is defeated."
+  },
+  {
+   "id": "unlock_hints",
+   "type": "toggle",
+   "default": true,
+   "label": "Show unlock hints",
+   "description": "On: a missing Artifact, clothing piece or ability says where it comes from, such as a zone level, a vendor or a side story. Off: these hints read ??? instead."
   }
  ]
 }

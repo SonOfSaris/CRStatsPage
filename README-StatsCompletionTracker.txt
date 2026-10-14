@@ -62,6 +62,7 @@ HOW IT COUNTS
       leads to at its end, until the main story is done or you have a score on it);
       Artifacts and clothes you have not unlocked show as ???, next to where they come from;
       a missing ability shows as ??? until its Resonant is defeated.
+    The hints on where a missing thing comes from can be switched off: they then read ???.
 
 UNINSTALL
   Delete the crmods\StatsCompletionTracker folder. Nothing else was changed.
